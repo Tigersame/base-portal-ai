@@ -6,6 +6,10 @@ export enum Tab {
   PORTFOLIO = 'portfolio'
 }
 
+export type TokenCategory = 'Mainnet' | 'Stables' | 'Ecosystem' | 'Governance';
+export type TokenTemplate = 'Meme' | 'Utility' | 'DeFi' | 'Custom';
+export type OrderType = 'market' | 'limit';
+
 export interface Token {
   symbol: string;
   name: string;
@@ -13,8 +17,19 @@ export interface Token {
   change24h: number;
   balance: number;
   icon: string;
+  category: TokenCategory;
   iconUrl?: string;
   address?: string;
+}
+
+export interface LimitOrder {
+  id: string;
+  fromToken: string;
+  toToken: string;
+  amount: string;
+  targetPrice: string;
+  status: 'pending' | 'filled' | 'cancelled';
+  timestamp: number;
 }
 
 export interface MorphoVault {
@@ -55,6 +70,11 @@ export interface AIInsight {
   alerts?: string[];
 }
 
+export interface SentimentPoint {
+  date: string;
+  score: number;
+}
+
 export interface TokenLaunchConfig {
   name: string;
   symbol: string;
@@ -62,4 +82,9 @@ export interface TokenLaunchConfig {
   initialLiquidity: string;
   description: string;
   image?: string;
+  template: TokenTemplate;
+  buyTax: string;
+  sellTax: string;
+  burnRate: string;
+  lockPeriod: string;
 }
