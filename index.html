@@ -1,0 +1,38 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Base Portal AI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="fc:miniapp" content='{
+      "version":"next",
+      "imageUrl":"https://picsum.photos/seed/baseportal/800/600",
+      "button":{
+          "title":"Launch Portal",
+          "action":{
+          "type":"launch_miniapp",
+          "name":"Base Portal AI",
+          "url":"https://baseportal.app"
+          }
+      }
+    }' />
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@farcaster/miniapp-sdk": "https://esm.sh/@farcaster/miniapp-sdk@^0.2.1"
+  }
+}
+</script>
+</head>
+<body class="bg-[#050505] text-white">
+    <div id="root"></div>
+</body>
+</html>
