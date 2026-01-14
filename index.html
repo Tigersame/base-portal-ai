@@ -2,22 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Base Portal AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <meta name="fc:miniapp" content='{
       "version":"next",
-      "imageUrl":"https://picsum.photos/seed/baseportal/800/600",
+      "imageUrl":"https://picsum.photos/seed/baseportalhub/800/600",
       "ogTitle":"Base Portal AI",
-      "ogDescription":"AI-Powered Swaps and Yield on Base Chain.",
-      "ogImageUrl":"https://picsum.photos/seed/baseportal/1200/630",
+      "ogDescription":"Your intelligent gateway to Base Chain. Swaps, Earn, and Launcher in one hub.",
+      "ogImageUrl":"https://picsum.photos/seed/baseportalhub/1200/630",
       "button":{
           "title":"Launch Portal",
           "action":{
           "type":"launch_miniapp",
           "name":"Base Portal AI",
           "url":"https://baseportal.app",
-          "splashImageUrl":"https://picsum.photos/seed/portalsplash/400/400",
+          "splashImageUrl":"https://picsum.photos/seed/baseportalhub/400/400",
           "splashBackgroundColor":"#050505"
           }
       }
@@ -44,10 +44,10 @@
 </script>
 <style>
   :root {
-    --safe-area-top: 0px;
-    --safe-area-bottom: 0px;
-    --safe-area-left: 0px;
-    --safe-area-right: 0px;
+    --safe-area-top: env(safe-area-inset-top, 0px);
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-left: env(safe-area-inset-left, 0px);
+    --safe-area-right: env(safe-area-inset-right, 0px);
     --ock-font-family: 'Inter', sans-serif;
   }
   body {
@@ -58,12 +58,20 @@
     background-color: #050505;
     color: white;
     min-height: 100vh;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   /* OnchainKit Overrides */
   .ock-wallet-container {
     background-color: #111 !important;
     border: 1px solid #222 !important;
     border-radius: 24px !important;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
   }
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">

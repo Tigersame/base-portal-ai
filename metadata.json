@@ -1,6 +1,6 @@
 {
   "name": "Base Portal AI",
-  "description": "An all-in-one onchain portal for Base: Swaps, Yield Earn, Token Launching, and AI-powered Portfolio analytics.",
+  "description": "Unified AI-powered hub for Base: Smart Swaps, Morpho Yield, and clanker-style Token Launcher.",
   "requestFramePermissions": [
     "camera",
     "microphone",
