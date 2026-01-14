@@ -4,8 +4,9 @@ import { Search, ChevronDown, X, Plus, Loader2, AlertCircle } from 'lucide-react
 import { Token } from '../types';
 import { fetchTokenMetadata } from '../services/geminiService';
 
-export const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <div className={`bg-[#111111] border border-[#222222] rounded-3xl p-5 shadow-2xl ${className}`}>
+// Added onClick to Card prop type to fix error at App.tsx:734
+export const Card: React.FC<{ children: React.ReactNode; className?: string; onClick?: () => void }> = ({ children, className = "", onClick }) => (
+  <div className={`bg-[#111111] border border-[#222222] rounded-3xl p-5 shadow-2xl ${className}`} onClick={onClick}>
     {children}
   </div>
 );

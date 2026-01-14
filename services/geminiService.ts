@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SentimentPoint } from "../types";
+import { SentimentPoint, CandleData } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -24,6 +24,39 @@ const callWithRetry = async (fn: () => Promise<any>, retries = 2, delay = 3000) 
     }
     throw error;
   }
+};
+
+export const getHistoricalPriceData = async (timeframe: string): Promise<CandleData[]> => {
+  const cacheKey = `price_history_${timeframe}`;
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < INSIGHTS_CACHE_TTL) {
+    return cached.data;
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 800));
+  const data: CandleData[] = [];
+  let basePrice = 2800;
+  const count = timeframe === '1D' ? 24 : timeframe === '7D' ? 28 : timeframe === '1M' ? 30 : 52;
+  
+  for (let i = 0; i < count; i++) {
+    const open = basePrice + (Math.random() - 0.5) * 50;
+    const close = open + (Math.random() - 0.5) * 40;
+    const high = Math.max(open, close) + Math.random() * 20;
+    const low = Math.min(open, close) - Math.random() * 20;
+    const volume = 500000 + Math.random() * 1000000;
+    
+    let timeLabel = "";
+    if (timeframe === '1D') timeLabel = `${i}:00`;
+    else if (timeframe === '7D') timeLabel = `Day ${Math.floor(i/4)}`;
+    else if (timeframe === '1M') timeLabel = `Day ${i + 1}`;
+    else timeLabel = `Week ${i + 1}`;
+
+    data.push({ time: timeLabel, open, close, high, low, volume });
+    basePrice = close;
+  }
+  
+  cache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
 };
 
 export const getMarketInsights = async (marketData: any) => {

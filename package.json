@@ -14,7 +14,9 @@
     "recharts": "^3.6.0",
     "@google/genai": "^1.35.0",
     "lucide-react": "^0.562.0",
-    "@farcaster/miniapp-sdk": "^0.2.1"
+    "@farcaster/miniapp-sdk": "^0.2.1",
+    "@coinbase/onchainkit": "^1.0.0",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

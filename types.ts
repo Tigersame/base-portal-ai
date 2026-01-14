@@ -22,6 +22,13 @@ export interface Token {
   address?: string;
 }
 
+// Added TokenApproval interface for managing asset permissions
+export interface TokenApproval {
+  symbol: string;
+  allowance: string;
+  iconUrl?: string;
+}
+
 export interface LimitOrder {
   id: string;
   fromToken: string;
@@ -73,6 +80,15 @@ export interface AIInsight {
 export interface SentimentPoint {
   date: string;
   score: number;
+}
+
+export interface CandleData {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
 }
 
 export interface TokenLaunchConfig {
