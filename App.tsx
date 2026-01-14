@@ -1,52 +1,47 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { 
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Sector
+  PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts';
 import { 
   ArrowLeftRight, 
   Rocket, 
   PieChart as PieChartIcon, 
-  RefreshCw,
-  Plus,
   Globe,
   CheckCircle2,
   ArrowDown,
-  Activity,
-  Share2,
-  Wallet,
   ChevronLeft,
-  ChevronRight,
   Loader2,
-  Upload,
   ArrowRight,
-  X,
-  Crosshair,
-  Timer,
-  Info,
   Settings2,
   Sparkles,
   User,
   Power,
-  Copy,
-  ExternalLink,
-  ShieldAlert,
-  Shield,
   ShieldCheck,
   TrendingUp,
   BarChart3,
-  Bell,
   LogIn,
   BadgeCheck,
   Flame,
   Lock,
   Zap,
-  Coins
+  Plus,
+  Wallet as WalletIcon
 } from 'lucide-react';
-import { Tab, Token, MorphoVault, SentimentPoint, TokenCategory, TokenTemplate, OrderType, LimitOrder, AIInsight, TokenLaunchConfig, CandleData, TokenApproval } from './types';
+import { 
+  Wallet, 
+  ConnectWallet, 
+  WalletDropdown, 
+  WalletDropdownDisconnect,
+  WalletDropdownLink,
+  WalletDropdownBaseName
+} from '@coinbase/onchainkit/wallet';
+import { Address, Avatar, Name, Identity, EthBalance } from '@coinbase/onchainkit/identity';
+import { useAccount } from 'wagmi';
+
+import { Tab, Token, MorphoVault, TokenCategory, TokenTemplate, OrderType, AIInsight, TokenLaunchConfig } from './types';
 import { Card, Button, Modal, SearchableTokenSelector } from './components/UI';
-import { getMarketInsights, generateTokenDescription, getSwapQuote, getHistoricalSentiment, getHistoricalPriceData } from './services/geminiService';
+import { getMarketInsights, generateTokenDescription, getSwapQuote } from './services/geminiService';
 
 const COLORS = ['#0052FF', '#00C49F', '#FFBB28', '#FF8042', '#8A2BE2'];
 
@@ -121,11 +116,12 @@ const INITIAL_MORPHO_VAULTS: MorphoVault[] = [
 ];
 
 const App: React.FC = () => {
+  const { address: onchainAddress, isConnected } = useAccount();
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SWAP);
-  const [address, setAddress] = useState<string | null>(null);
+  const [farcasterAddress, setFarcasterAddress] = useState<string | null>(null);
   const [basename, setBasename] = useState<string | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [showWalletMenu, setShowWalletMenu] = useState(false);
+  const [isConnectingFarcaster, setIsConnectingFarcaster] = useState(false);
+  const [showFarcasterMenu, setShowFarcasterMenu] = useState(false);
   const [farcasterUser, setFarcasterUser] = useState<any>(null);
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
@@ -137,21 +133,16 @@ const App: React.FC = () => {
   const [vaults, setVaults] = useState<MorphoVault[]>(INITIAL_MORPHO_VAULTS);
   const [selectedVault, setSelectedVault] = useState<MorphoVault | null>(null);
   const [earnAmount, setEarnAmount] = useState('');
-  const [isProcessingEarn, setIsProcessingEarn] = useState(false);
 
   const [swapFrom, setSwapFrom] = useState(INITIAL_TOKENS[0]);
   const [swapTo, setSwapTo] = useState(INITIAL_TOKENS[2]);
   const [swapAmount, setSwapAmount] = useState('1.0');
   const [swapQuote, setSwapQuote] = useState<any>(null);
-  const [swapType, setSwapType] = useState<OrderType>('market');
-  const [limitPrice, setLimitPrice] = useState<string>('');
-  const [slippage, setSlippage] = useState('0.5');
   const [showSwapConfirm, setShowSwapConfirm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
   const [isSwapping, setIsSwapping] = useState(false);
   const [isRefreshingQuote, setIsRefreshingQuote] = useState(false);
-  const [isDebouncing, setIsDebouncing] = useState(false);
   const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
 
   const [launchConfig, setLaunchConfig] = useState<TokenLaunchConfig>({
@@ -170,9 +161,8 @@ const App: React.FC = () => {
         const context = await sdk.context;
         if (context?.user) {
           setFarcasterUser(context.user);
-          // Deriving a consistent Portal address from FID
           const fidAddr = `0x${context.user.fid.toString(16).padStart(40, '0')}`;
-          setAddress(fidAddr);
+          setFarcasterAddress(fidAddr);
           if (context.user.username) {
             setBasename(`${context.user.username}.base`);
           }
@@ -186,19 +176,17 @@ const App: React.FC = () => {
     fetchAI();
   }, []);
 
-  const handleSignIn = async () => {
-    setIsConnecting(true);
+  const handleSignInFarcaster = async () => {
+    setIsConnectingFarcaster(true);
     try {
-      // Fixed error: sdk.actions.signIn returns signature result, user details are retrieved from sdk.context
       await sdk.actions.signIn({ 
         nonce: Math.random().toString(36).substring(2) 
       });
       const context = await sdk.context;
       if (context?.user) {
         setFarcasterUser(context.user);
-        // Using FID to derive a consistent deterministic address for the Portal
         const finalAddress = `0x${context.user.fid.toString(16).padStart(40, '0')}`;
-        setAddress(finalAddress);
+        setFarcasterAddress(finalAddress);
         if (context.user.username) {
           setBasename(`${context.user.username}.base`);
         }
@@ -206,15 +194,15 @@ const App: React.FC = () => {
     } catch (err) {
       console.error("Farcaster Sign-In failed:", err);
     } finally {
-      setIsConnecting(false);
+      setIsConnectingFarcaster(false);
     }
   };
 
-  const disconnectWallet = () => {
-    setAddress(null);
+  const disconnectFarcaster = () => {
+    setFarcasterAddress(null);
     setBasename(null);
     setFarcasterUser(null);
-    setShowWalletMenu(false);
+    setShowFarcasterMenu(false);
   };
 
   const fetchAI = async () => {
@@ -235,7 +223,7 @@ const App: React.FC = () => {
   }, [swapFrom.symbol, swapTo.symbol, swapAmount]);
 
   const refreshLiveBalance = useCallback(async (tokenSymbol: string) => {
-    if (activeTab !== Tab.SWAP || !farcasterUser) return;
+    if (activeTab !== Tab.SWAP || (!farcasterUser && !isConnected)) return;
     setIsRefreshingBalance(true);
     await new Promise(resolve => setTimeout(resolve, 600));
     setAvailableTokens(prev => prev.map(t => {
@@ -246,7 +234,7 @@ const App: React.FC = () => {
       return t;
     }));
     setIsRefreshingBalance(false);
-  }, [activeTab, farcasterUser]);
+  }, [activeTab, farcasterUser, isConnected]);
 
   useEffect(() => {
     if (activeTab === Tab.SWAP) refreshLiveBalance(swapFrom.symbol);
@@ -341,89 +329,88 @@ const App: React.FC = () => {
             <div className="w-10 h-10 bg-gradient-to-br from-[#0052FF] to-[#0022AA] rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(0,82,255,0.4)] transition-transform hover:scale-105 active:scale-95 cursor-pointer">
               <Globe className="text-white" size={22} />
             </div>
-            <div>
+            <div className="hidden sm:block">
               <h1 className="text-xl font-black tracking-tighter leading-none text-white uppercase italic">Base Portal</h1>
               <p className="text-[10px] text-blue-500 font-black uppercase tracking-[0.2em] mt-1">L2 Hub • AI Agent</p>
             </div>
           </div>
           
-          <div className="relative">
-            {!farcasterUser ? (
-              <button 
-                onClick={handleSignIn}
-                disabled={isConnecting}
-                className="bg-[#8a63d2] hover:bg-[#7a53c2] text-white px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 shadow-[0_4px_20px_rgba(138,99,210,0.4)]"
-              >
-                {isConnecting ? <Loader2 size={12} className="animate-spin" /> : <LogIn size={14} />}
-                {isConnecting ? "Authenticating..." : "Connect Farcaster"}
-              </button>
-            ) : (
-              <button 
-                onClick={() => setShowWalletMenu(!showWalletMenu)}
-                className="bg-[#111] border border-[#222] hover:border-[#8a63d2]/50 rounded-2xl pl-1 pr-3 py-1 flex items-center gap-3 transition-all group animate-in slide-in-from-right-4"
-              >
-                <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 shrink-0">
-                   {farcasterUser.pfpUrl ? (
-                      <img src={farcasterUser.pfpUrl} className="w-full h-full object-cover" alt="pfp" />
-                   ) : (
-                      <div className="w-full h-full bg-[#8a63d2] flex items-center justify-center text-xs text-white font-black">
-                         {farcasterUser.username?.[0].toUpperCase()}
-                      </div>
-                   )}
-                </div>
-                <div className="flex flex-col items-start -space-y-0.5 overflow-hidden">
-                   <div className="flex items-center gap-1 w-full">
-                      <span className="text-[11px] font-black uppercase text-white truncate max-w-[80px] group-hover:text-[#8a63d2] transition-colors">
-                        {farcasterUser.displayName}
-                      </span>
-                      <BadgeCheck size={12} className="text-blue-500 shrink-0" />
-                   </div>
-                   <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold text-[#8a63d2] uppercase tracking-tighter">@{farcasterUser.username}</span>
-                      <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest opacity-60">FID:{farcasterUser.fid}</span>
-                   </div>
-                </div>
-              </button>
-            )}
+          <div className="flex items-center gap-2">
+            {/* Wallet Integration using OnchainKit */}
+            <Wallet>
+              <ConnectWallet className="bg-[#0052FF] hover:bg-[#0042CC] text-white px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center gap-2 transition-all active:scale-95 shadow-[0_4px_20px_rgba(0,82,255,0.4)] h-10">
+                <WalletIcon size={14} />
+                <span className="hidden sm:inline">Connect Wallet</span>
+              </ConnectWallet>
+              <WalletDropdown>
+                <Identity className="px-4 pt-3 pb-2" hasCopyAddressOnClick>
+                  <Avatar />
+                  <Name />
+                  <Address />
+                  <EthBalance />
+                </Identity>
+                <WalletDropdownBaseName />
+                <WalletDropdownLink icon="wallet" href="https://wallet.coinbase.com">Go to Wallet Dashboard</WalletDropdownLink>
+                <WalletDropdownDisconnect />
+              </WalletDropdown>
+            </Wallet>
 
-            {showWalletMenu && farcasterUser && (
-              <>
-                <div className="fixed inset-0 z-[99]" onClick={() => setShowWalletMenu(false)} />
-                <div className="absolute right-0 mt-3 w-72 bg-[#0A0A0A] border border-[#222] rounded-[32px] p-4 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200">
-                   <div className="p-5 mb-3 bg-gradient-to-br from-[#111] to-[#0A0A0A] rounded-3xl border border-[#222] relative overflow-hidden">
-                      <div className="flex items-center gap-4 mb-5 relative z-10">
-                         <div className="w-14 h-14 rounded-2xl bg-[#8a63d2]/20 p-1 border border-[#8a63d2]/30 overflow-hidden">
-                            <img src={farcasterUser.pfpUrl} className="w-full h-full object-cover rounded-[12px]" alt="pfp" />
-                         </div>
-                         <div className="flex flex-col">
-                            <span className="text-base font-black text-white uppercase tracking-tight flex items-center gap-1.5">
-                               {farcasterUser.displayName} <BadgeCheck size={16} className="text-blue-500" />
-                            </span>
-                            <span className="text-[11px] text-[#8a63d2] font-black uppercase tracking-widest">@{farcasterUser.username}</span>
-                         </div>
+            {/* Farcaster Identity Integration */}
+            <div className="relative">
+              {!farcasterUser ? (
+                <button 
+                  onClick={handleSignInFarcaster}
+                  disabled={isConnectingFarcaster}
+                  className="bg-[#8a63d2] hover:bg-[#7a53c2] text-white w-10 h-10 rounded-2xl flex items-center justify-center transition-all active:scale-95 shadow-[0_4px_20px_rgba(138,99,210,0.4)]"
+                >
+                  {isConnectingFarcaster ? <Loader2 size={16} className="animate-spin" /> : <LogIn size={18} />}
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setShowFarcasterMenu(!showFarcasterMenu)}
+                  className="w-10 h-10 rounded-2xl overflow-hidden border border-[#8a63d2]/50 hover:border-[#8a63d2] transition-all"
+                >
+                  {farcasterUser.pfpUrl ? (
+                    <img src={farcasterUser.pfpUrl} className="w-full h-full object-cover" alt="pfp" />
+                  ) : (
+                    <div className="w-full h-full bg-[#8a63d2] flex items-center justify-center text-xs text-white font-black">
+                      {farcasterUser.username?.[0].toUpperCase()}
+                    </div>
+                  )}
+                </button>
+              )}
+
+              {showFarcasterMenu && farcasterUser && (
+                <>
+                  <div className="fixed inset-0 z-[99]" onClick={() => setShowFarcasterMenu(false)} />
+                  <div className="absolute right-0 mt-3 w-72 bg-[#0A0A0A] border border-[#222] rounded-[32px] p-4 shadow-2xl z-[100] animate-in fade-in zoom-in-95 duration-200">
+                    <div className="p-5 mb-3 bg-gradient-to-br from-[#111] to-[#0A0A0A] rounded-3xl border border-[#222]">
+                      <div className="flex items-center gap-4 mb-5">
+                        <div className="w-14 h-14 rounded-2xl bg-[#8a63d2]/20 p-1 border border-[#8a63d2]/30 overflow-hidden">
+                          <img src={farcasterUser.pfpUrl} className="w-full h-full object-cover rounded-[12px]" alt="pfp" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-base font-black text-white uppercase tracking-tight flex items-center gap-1.5 truncate max-w-[140px]">
+                            {farcasterUser.displayName} <BadgeCheck size={16} className="text-blue-500" />
+                          </span>
+                          <span className="text-[11px] text-[#8a63d2] font-black uppercase tracking-widest">@{farcasterUser.username}</span>
+                        </div>
                       </div>
-                      <div className="bg-black/40 p-3 rounded-2xl border border-white/5 space-y-2">
-                         <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase">
-                            <span>Farcaster ID</span>
-                            <span className="text-white font-mono">{farcasterUser.fid}</span>
-                         </div>
-                         <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase">
-                            <span>L2 Basename</span>
-                            <span className="text-blue-400 font-mono italic">{basename}</span>
-                         </div>
+                      <div className="bg-black/40 p-3 rounded-2xl border border-white/5 space-y-2 text-[10px] font-black text-gray-500 uppercase">
+                        <div className="flex justify-between items-center"><span>FID</span><span className="text-white">{farcasterUser.fid}</span></div>
+                        <div className="flex justify-between items-center"><span>Basename</span><span className="text-blue-400 italic">{basename}</span></div>
                       </div>
-                   </div>
-                   <div className="grid grid-cols-1 gap-1">
-                      <button onClick={() => { setShowSettings(true); setShowWalletMenu(false); }} className="w-full flex items-center gap-3 p-4 rounded-2xl text-gray-400 hover:bg-white/5 transition-colors text-[10px] font-black uppercase tracking-widest">
-                        <Settings2 size={16} className="text-gray-500" /> Portal Settings
-                      </button>
-                      <button onClick={disconnectWallet} className="w-full flex items-center gap-3 p-4 rounded-2xl text-red-400 hover:bg-red-500/10 transition-colors text-[10px] font-black uppercase tracking-widest border border-transparent hover:border-red-500/20">
-                        <Power size={16} /> Disconnect Identity
-                      </button>
-                   </div>
-                </div>
-              </>
-            )}
+                    </div>
+                    <button onClick={() => { setShowSettings(true); setShowFarcasterMenu(false); }} className="w-full flex items-center gap-3 p-4 rounded-2xl text-gray-400 hover:bg-white/5 transition-colors text-[10px] font-black uppercase tracking-widest">
+                      <Settings2 size={16} /> Portal Settings
+                    </button>
+                    <button onClick={disconnectFarcaster} className="w-full flex items-center gap-3 p-4 rounded-2xl text-red-400 hover:bg-red-500/10 transition-colors text-[10px] font-black uppercase tracking-widest">
+                      <Power size={16} /> Disconnect Identity
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -437,15 +424,15 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">You Sell</span>
                   <div 
-                    onClick={() => farcasterUser && setSwapAmount(swapFrom.balance.toString())}
-                    className={`flex items-center gap-2 cursor-pointer bg-black/40 px-3 py-1.5 rounded-xl border border-[#222] hover:bg-blue-500/5 transition-all ${!farcasterUser ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onClick={() => (farcasterUser || isConnected) && setSwapAmount(swapFrom.balance.toString())}
+                    className={`flex items-center gap-2 cursor-pointer bg-black/40 px-3 py-1.5 rounded-xl border border-[#222] hover:bg-blue-500/5 transition-all ${(!farcasterUser && !isConnected) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center gap-1.5">
                        {isRefreshingBalance ? <Loader2 size={10} className="animate-spin text-blue-500" /> : <div className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />}
                        <span className="text-[11px] text-gray-500 font-bold uppercase tracking-widest">Balance</span>
                     </div>
                     <span className={`text-xs font-black tabular-nums text-white`}>
-                      {farcasterUser ? swapFrom.balance.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0.00'}
+                      {(farcasterUser || isConnected) ? swapFrom.balance.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '0.00'}
                     </span>
                   </div>
                 </div>
@@ -460,7 +447,7 @@ const App: React.FC = () => {
               <div className="bg-[#111] p-6 rounded-[24px] border border-transparent transition-all mt-2">
                 <div className="flex justify-between items-center mb-4">
                   <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest">You Buy</span>
-                  <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-xl border border-[#222]"><span className="text-xs font-black text-white">{farcasterUser ? swapTo.balance.toLocaleString() : '0.00'}</span></div>
+                  <div className="flex items-center gap-2 bg-black/40 px-3 py-1.5 rounded-xl border border-[#222]"><span className="text-xs font-black text-white">{(farcasterUser || isConnected) ? swapTo.balance.toLocaleString() : '0.00'}</span></div>
                 </div>
                 <div className="flex justify-between items-center gap-4">
                   <input readOnly value={swapQuote?.outputAmount || ''} className="bg-transparent text-4xl sm:text-5xl outline-none font-black text-white w-full tabular-nums" placeholder="0.0" />
@@ -469,10 +456,10 @@ const App: React.FC = () => {
               </div>
             </Card>
             <Button 
-              onClick={() => farcasterUser ? setShowSwapConfirm(true) : handleSignIn()} 
-              className={`w-full py-5 text-lg rounded-[28px] ${!farcasterUser ? 'bg-[#8a63d2] shadow-[0_4px_20px_rgba(138,99,210,0.3)]' : ''}`}
+              onClick={() => (farcasterUser || isConnected) ? setShowSwapConfirm(true) : handleSignInFarcaster()} 
+              className={`w-full py-5 text-lg rounded-[28px] ${(!farcasterUser && !isConnected) ? 'bg-[#8a63d2] shadow-[0_4px_20px_rgba(138,99,210,0.3)]' : ''}`}
             >
-              {!farcasterUser ? 'Sign In with Farcaster' : 'Review Swap'}
+              {(!farcasterUser && !isConnected) ? 'Connect Identity' : 'Review Swap'}
             </Button>
           </div>
         )}
@@ -481,7 +468,7 @@ const App: React.FC = () => {
           <div className="space-y-6 animate-in fade-in pb-12">
             <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic px-1">Launcher</h2>
             
-            {!farcasterUser ? (
+            {(!farcasterUser && !isConnected) ? (
               <div className="py-20 flex flex-col items-center justify-center text-center space-y-8 animate-in zoom-in-95">
                  <div className="w-24 h-24 bg-[#111] rounded-[40px] flex items-center justify-center border border-[#222] shadow-2xl">
                     <Rocket size={48} className="text-gray-600" />
@@ -490,7 +477,7 @@ const App: React.FC = () => {
                     <p className="text-base font-black text-white uppercase tracking-tighter">Sign in to Launch on Base</p>
                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">Identity verification is required to deploy smart contracts to Base Mainnet.</p>
                  </div>
-                 <Button onClick={handleSignIn} className="bg-[#8a63d2] px-10">Sign In with Farcaster</Button>
+                 <Button onClick={handleSignInFarcaster} className="bg-[#8a63d2] px-10">Sign In with Farcaster</Button>
               </div>
             ) : launchStep === 1 ? (
               <Card className="p-8 space-y-8 rounded-[40px] border-[#222]">
@@ -537,7 +524,6 @@ const App: React.FC = () => {
             ) : launchStep === 2 ? (
               <div className="space-y-6 animate-in slide-in-from-right-8">
                 <button onClick={() => setLaunchStep(1)} className="flex items-center gap-2 text-[10px] font-black text-gray-500 hover:text-white uppercase tracking-widest bg-[#111] px-4 py-2 rounded-xl border border-[#222]"><ChevronLeft size={14} /> Back to Metadata</button>
-                
                 <div className="grid grid-cols-2 gap-3">
                    {Object.keys(TEMPLATE_PRESETS).map((t) => (
                      <button 
@@ -553,85 +539,21 @@ const App: React.FC = () => {
                            {launchConfig.template === t && <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,1)]" />}
                         </div>
                         <span className="text-xs font-black text-white uppercase tracking-tight">{t}</span>
-                        <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">
-                           {t === 'Meme' ? 'Viral Growth' : t === 'Utility' ? 'Functional' : t === 'DeFi' ? 'Sustainable' : 'Manual Set'}
-                        </span>
                      </button>
                    ))}
                 </div>
-
                 <Card className="p-8 space-y-6 border-[#222]">
-                   <div className="grid grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><ArrowDown size={12} className="text-green-500" /> Buy Tax (%)</label>
-                        <input type="number" value={launchConfig.buyTax} onChange={(e) => setLaunchConfig({...launchConfig, buyTax: e.target.value})} className="w-full bg-[#050505] border border-[#222] rounded-xl p-3 text-sm font-black text-white outline-none focus:border-blue-500" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><ArrowRight size={12} className="text-red-500" /> Sell Tax (%)</label>
-                        <input type="number" value={launchConfig.sellTax} onChange={(e) => setLaunchConfig({...launchConfig, sellTax: e.target.value})} className="w-full bg-[#050505] border border-[#222] rounded-xl p-3 text-sm font-black text-white outline-none focus:border-blue-500" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><Flame size={12} className="text-orange-400" /> Burn Rate (%)</label>
-                        <input type="number" value={launchConfig.burnRate} onChange={(e) => setLaunchConfig({...launchConfig, burnRate: e.target.value})} className="w-full bg-[#050505] border border-[#222] rounded-xl p-3 text-sm font-black text-white outline-none focus:border-blue-500" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"><Lock size={12} className="text-blue-400" /> Liq Lock</label>
-                        <select value={launchConfig.lockPeriod} onChange={(e) => setLaunchConfig({...launchConfig, lockPeriod: e.target.value})} className="w-full bg-[#050505] border border-[#222] rounded-xl p-3 text-xs font-black text-white outline-none appearance-none">
-                           <option>None</option>
-                           <option>6 Months</option>
-                           <option>1 Year</option>
-                           <option>Forever</option>
-                        </select>
-                      </div>
-                   </div>
-                   
-                   <div className="pt-4 space-y-4">
-                      <div className="p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl space-y-1">
-                         <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            <span>Initial Liquidity</span>
-                            <span className="text-white">1.0 ETH</span>
-                         </div>
-                         <div className="flex justify-between items-center text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                            <span>Total Supply</span>
-                            <span className="text-white">{parseInt(launchConfig.supply).toLocaleString()} ${launchConfig.symbol}</span>
-                         </div>
-                      </div>
-                      <Button onClick={handleDeployToken} className="w-full py-6 text-xl rounded-[32px]">
-                         {isDeploying ? <Loader2 size={24} className="animate-spin" /> : <><Rocket size={24} /> Deploy to Base</>}
-                      </Button>
-                   </div>
+                   <Button onClick={handleDeployToken} className="w-full py-6 text-xl rounded-[32px]">
+                      {isDeploying ? <Loader2 size={24} className="animate-spin" /> : <><Rocket size={24} /> Deploy to Base</>}
+                   </Button>
                 </Card>
-
-                {isDeploying && (
-                  <div className="bg-[#050505] border border-[#222] rounded-2xl p-6 font-mono text-[10px] space-y-2 max-h-[150px] overflow-y-auto animate-in fade-in">
-                    {deploymentLog.map((log, idx) => (
-                      <div key={idx} className="flex gap-2">
-                         <span className="text-blue-500">{'>'}</span>
-                         <span className="text-gray-400">{log}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ) : (
               <div className="py-12 flex flex-col items-center text-center space-y-8 animate-in zoom-in-95">
                  <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center border-2 border-green-500 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
                     <CheckCircle2 size={48} className="text-green-500" />
                  </div>
-                 <div className="space-y-2">
-                    <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter">${launchConfig.symbol} is LIVE</h3>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Successfully deployed on Base Mainnet</p>
-                 </div>
-                 <Card className="p-6 w-full space-y-4 bg-[#111] border-[#222]">
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase text-gray-500">
-                       <span>Contract Address</span>
-                       <span className="text-blue-400 font-mono">0x{Math.random().toString(16).slice(2, 10)}...</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase text-gray-500">
-                       <span>LPs Created</span>
-                       <span className="text-white">Aerodrome v3</span>
-                    </div>
-                 </Card>
+                 <h3 className="text-3xl font-black text-white uppercase italic tracking-tighter">${launchConfig.symbol} is LIVE</h3>
                  <Button onClick={() => setLaunchStep(1)} variant="secondary" className="w-full rounded-[24px]">Create Another</Button>
               </div>
             )}
@@ -643,30 +565,25 @@ const App: React.FC = () => {
               <div className="flex justify-between items-end px-1">
                 <div>
                   <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic">
-                    {farcasterUser ? `Hey, ${farcasterUser.displayName.split(' ')[0]}!` : 'Portfolio'}
+                    {(farcasterUser || isConnected) ? `Hey, ${(farcasterUser?.displayName || 'User').split(' ')[0]}!` : 'Portfolio'}
                   </h2>
                   <p className="text-[11px] text-gray-500 font-bold uppercase mt-0.5 tracking-widest">Global Asset Overview</p>
                 </div>
-                {farcasterUser && <button onClick={fetchAI} className="p-2.5 bg-[#111] border border-[#222] rounded-xl text-blue-500 hover:text-white transition-colors"><Sparkles size={18} /></button>}
+                {(farcasterUser || isConnected) && <button onClick={fetchAI} className="p-2.5 bg-[#111] border border-[#222] rounded-xl text-blue-500 hover:text-white transition-colors"><Sparkles size={18} /></button>}
               </div>
 
-              {!farcasterUser ? (
+              {(!farcasterUser && !isConnected) ? (
                  <Card className="p-10 text-center space-y-8 border-[#222] bg-[#0A0A0A] rounded-[48px] animate-in slide-in-from-bottom-8">
-                    <div className="w-20 h-20 bg-[#111] rounded-[40px] flex items-center justify-center mx-auto border border-[#222] shadow-2xl">
-                       <User size={36} className="text-gray-600" />
-                    </div>
+                    <div className="w-20 h-20 bg-[#111] rounded-[40px] flex items-center justify-center mx-auto border border-[#222] shadow-2xl"><User size={36} className="text-gray-600" /></div>
                     <div className="space-y-2">
                        <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Sync Portfolio</h3>
-                       <p className="text-xs text-gray-500 font-bold uppercase leading-relaxed tracking-widest">Connect your Farcaster identity to instantly see your Base balances and AI analytics.</p>
+                       <p className="text-xs text-gray-500 font-bold uppercase tracking-widest leading-relaxed">Connect identity to see your Base balances.</p>
                     </div>
-                    <Button onClick={handleSignIn} className="w-full bg-[#8a63d2] hover:bg-[#7a53c2] py-5 rounded-3xl">Get Started</Button>
+                    <Button onClick={handleSignInFarcaster} className="w-full bg-[#8a63d2] py-5 rounded-3xl">Get Started</Button>
                  </Card>
               ) : (
                  <div className="space-y-6 animate-in fade-in">
                     <Card className="p-8 rounded-[40px] border-[#222] bg-[#0A0A0A] overflow-hidden relative shadow-2xl">
-                      <div className="absolute top-4 right-6 flex items-center gap-1.5 bg-[#8a63d211] px-3 py-1 rounded-full border border-[#8a63d222]">
-                         <span className="text-[8px] font-black text-[#8a63d2] uppercase tracking-[0.2em]">Live Identity Sync</span>
-                      </div>
                       <div className="flex flex-col items-center">
                         <div className="h-64 w-full relative">
                           <ResponsiveContainer width="100%" height="100%">
@@ -698,18 +615,13 @@ const App: React.FC = () => {
 
                     {aiInsight && (
                       <Card className="p-6 rounded-[32px] border-[#8a63d2]/20 bg-gradient-to-br from-[#8a63d205] to-transparent space-y-3 shadow-lg">
-                        <div className="flex items-center gap-2 text-[#8a63d2]">
-                          <Sparkles size={16} />
-                          <h3 className="text-xs font-black uppercase tracking-[0.2em]">Portal Intelligence</h3>
-                        </div>
                         <p className="text-xs text-gray-300 font-bold leading-relaxed">{aiInsight.summary}</p>
                       </Card>
                     )}
 
                     <div className="space-y-2">
-                      <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest ml-1">Asset Allocation</h3>
                       {activeCategory?.tokens.map(token => (
-                        <div key={token.symbol} className="bg-[#111] border border-[#222] p-4 rounded-2xl flex items-center justify-between hover:border-[#333] transition-all">
+                        <div key={token.symbol} className="bg-[#111] border border-[#222] p-4 rounded-2xl flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             {token.iconUrl ? <img src={token.iconUrl} className="w-10 h-10 rounded-xl" alt={token.symbol} /> : <div className="w-10 h-10 rounded-xl bg-[#222] flex items-center justify-center font-black text-blue-500">{token.symbol[0]}</div>}
                             <div>
@@ -719,7 +631,6 @@ const App: React.FC = () => {
                           </div>
                           <div className="text-right">
                             <div className="text-sm font-black text-white">${(token.balance * token.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
-                            <div className="text-[10px] font-bold text-gray-500">{token.balance.toLocaleString()} {token.symbol}</div>
                           </div>
                         </div>
                       ))}
@@ -745,19 +656,18 @@ const App: React.FC = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-black text-green-400 tabular-nums">{vault.totalApy}%</div>
-                        <div className="text-[9px] text-gray-600 font-bold uppercase">Estimated APY</div>
                       </div>
                     </Card>
                   ))}
                 </div>
              ) : (
                 <div className="space-y-6 animate-in slide-in-from-right-8">
-                   <button onClick={() => setSelectedVault(null)} className="flex items-center gap-2 text-[10px] font-black text-gray-500 hover:text-white uppercase tracking-widest bg-[#111] px-4 py-2 rounded-xl border border-[#222] transition-colors"><ChevronLeft size={14} /> All Vaults</button>
+                   <button onClick={() => setSelectedVault(null)} className="flex items-center gap-2 text-[10px] font-black text-gray-500 hover:text-white uppercase tracking-widest bg-[#111] px-4 py-2 rounded-xl border border-[#222]"><ChevronLeft size={14} /> All Vaults</button>
                    <Card className="p-8 space-y-8 border-[#222] rounded-[40px] shadow-2xl">
                       <div className="flex justify-between items-start">
                          <div>
                             <h3 className="text-3xl font-black text-white uppercase tracking-tighter italic">{selectedVault.name}</h3>
-                            <p className="text-xs text-gray-500 font-mono mt-1 opacity-60">{selectedVault.address}</p>
+                            <p className="text-xs text-gray-500 font-mono mt-1 opacity-60 truncate max-w-[120px]">{selectedVault.address}</p>
                          </div>
                          <div className="text-4xl font-black text-green-400 tabular-nums">{selectedVault.totalApy}%</div>
                       </div>
@@ -777,8 +687,8 @@ const App: React.FC = () => {
                             </div>
                             <input type="number" placeholder="0.00" value={earnAmount} onChange={(e) => setEarnAmount(e.target.value)} className="bg-transparent text-4xl font-black text-white outline-none w-full tabular-nums" />
                          </div>
-                         <Button onClick={() => farcasterUser ? null : handleSignIn()} className="w-full py-6 text-xl rounded-[32px]">
-                           {farcasterUser ? "Deposit & Earn" : "Connect to Earn"}
+                         <Button onClick={() => (farcasterUser || isConnected) ? null : handleSignInFarcaster()} className="w-full py-6 text-xl rounded-[32px]">
+                           {(farcasterUser || isConnected) ? "Deposit & Earn" : "Connect Identity"}
                          </Button>
                       </div>
                    </Card>
@@ -790,19 +700,19 @@ const App: React.FC = () => {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-[#222] px-6 pb-[calc(1.5rem+var(--safe-area-bottom))] pt-4 flex justify-between items-center z-[90]">
         <button onClick={() => setActiveTab(Tab.SWAP)} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab === Tab.SWAP ? 'text-blue-500 scale-110' : 'text-gray-500 hover:text-white'}`}>
-          <ArrowLeftRight size={22} className={activeTab === Tab.SWAP ? "drop-shadow-[0_0_8px_rgba(0,82,255,0.6)]" : ""} />
+          <ArrowLeftRight size={22} />
           <span className="text-[9px] font-black uppercase tracking-widest">Swap</span>
         </button>
         <button onClick={() => setActiveTab(Tab.EARN)} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab === Tab.EARN ? 'text-green-400 scale-110' : 'text-gray-500 hover:text-white'}`}>
-          <BarChart3 size={22} className={activeTab === Tab.EARN ? "drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]" : ""} />
+          <BarChart3 size={22} />
           <span className="text-[9px] font-black uppercase tracking-widest">Earn</span>
         </button>
         <button onClick={() => setActiveTab(Tab.LAUNCH)} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab === Tab.LAUNCH ? 'text-[#8a63d2] scale-110' : 'text-gray-500 hover:text-white'}`}>
-          <Rocket size={22} className={activeTab === Tab.LAUNCH ? "drop-shadow-[0_0_8px_rgba(138,99,210,0.6)]" : ""} />
+          <Rocket size={22} />
           <span className="text-[9px] font-black uppercase tracking-widest">Launch</span>
         </button>
         <button onClick={() => setActiveTab(Tab.PORTFOLIO)} className={`flex flex-col items-center gap-1.5 transition-all ${activeTab === Tab.PORTFOLIO ? 'text-blue-500 scale-110' : 'text-gray-500 hover:text-white'}`}>
-          <PieChartIcon size={22} className={activeTab === Tab.PORTFOLIO ? "drop-shadow-[0_0_8px_rgba(0,82,255,0.6)]" : ""} />
+          <PieChartIcon size={22} />
           <span className="text-[9px] font-black uppercase tracking-widest">Assets</span>
         </button>
       </nav>

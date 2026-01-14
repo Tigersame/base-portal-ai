@@ -3,6 +3,7 @@
   "description": "An all-in-one onchain portal for Base: Swaps, Yield Earn, Token Launching, and AI-powered Portfolio analytics.",
   "requestFramePermissions": [
     "camera",
-    "microphone"
+    "microphone",
+    "geolocation"
   ]
 }

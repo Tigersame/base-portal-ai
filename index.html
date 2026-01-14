@@ -32,8 +32,13 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
     "@farcaster/miniapp-sdk": "https://esm.sh/@farcaster/miniapp-sdk@^0.2.1",
-    "@coinbase/onchainkit": "https://esm.sh/@coinbase/onchainkit@^1.0.0",
-    "viem": "https://esm.sh/viem@^2.21.0"
+    "@coinbase/onchainkit": "https://esm.sh/@coinbase/onchainkit@^1.1.0",
+    "@coinbase/onchainkit/": "https://esm.sh/@coinbase/onchainkit@^1.1.0/",
+    "viem": "https://esm.sh/viem@^2.21.0",
+    "viem/": "https://esm.sh/viem@^2.21.0/",
+    "wagmi": "https://esm.sh/wagmi@^2.16.0",
+    "wagmi/": "https://esm.sh/wagmi@^2.16.0/",
+    "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@^5.66.0"
   }
 }
 </script>
@@ -43,6 +48,7 @@
     --safe-area-bottom: 0px;
     --safe-area-left: 0px;
     --safe-area-right: 0px;
+    --ock-font-family: 'Inter', sans-serif;
   }
   body {
     padding-top: var(--safe-area-top);
@@ -53,7 +59,14 @@
     color: white;
     min-height: 100vh;
   }
+  /* OnchainKit Overrides */
+  .ock-wallet-container {
+    background-color: #111 !important;
+    border: 1px solid #222 !important;
+    border-radius: 24px !important;
+  }
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="root"></div>

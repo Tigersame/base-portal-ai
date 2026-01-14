@@ -1,27 +1,16 @@
 {
   "name": "base-portal-ai",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "Base Portal AI Mini App",
+  "main": "server.js",
+  "type": "commonjs",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "node server.js"
   },
   "dependencies": {
-    "react-dom": "^19.2.3",
-    "react": "^19.2.3",
-    "recharts": "^3.6.0",
-    "@google/genai": "^1.35.0",
-    "lucide-react": "^0.562.0",
-    "@farcaster/miniapp-sdk": "^0.2.1",
-    "@coinbase/onchainkit": "^1.0.0",
-    "viem": "^2.21.0"
+    "express": "^4.18.2"
   },
-  "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
