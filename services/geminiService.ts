@@ -147,7 +147,7 @@ export const getSwapQuote = async (from: string, to: string, amount: string) => 
   try {
     const response = await callWithRetry(() => ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Simulate a live swap quote for ${amount} ${from} to ${to} on Base chain. Include price impact and a mock route.`,
+      contents: `Simulate a live swap quote for ${amount} ${from} to ${to} on Base chain. Include price impact, network fee, slippage, and a mock route.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -156,9 +156,11 @@ export const getSwapQuote = async (from: string, to: string, amount: string) => 
             outputAmount: { type: Type.STRING },
             priceImpact: { type: Type.STRING },
             route: { type: Type.STRING },
-            fee: { type: Type.STRING }
+            fee: { type: Type.STRING },
+            slippage: { type: Type.STRING },
+            networkFeeUsd: { type: Type.STRING }
           },
-          required: ["outputAmount", "priceImpact", "route", "fee"]
+          required: ["outputAmount", "priceImpact", "route", "fee", "slippage", "networkFeeUsd"]
         }
       }
     }));
@@ -174,7 +176,9 @@ export const getSwapQuote = async (from: string, to: string, amount: string) => 
       outputAmount: out,
       priceImpact: "0.15%",
       route: "Aerodrome (Direct)",
-      fee: "0.0001 ETH"
+      fee: "0.0001 ETH",
+      slippage: "0.5%",
+      networkFeeUsd: "0.05"
     };
     return fallback;
   }

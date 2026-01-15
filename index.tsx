@@ -13,8 +13,9 @@ const wagmiConfig = createConfig({
   chains: [base],
   connectors: [
     coinbaseWallet({
-      appName: 'Base Portal AI',
-      preference: 'all', // Enables Smart Wallet (Base Wallet) + EOA
+      appName: 'BEND',
+      preference: 'smartWalletOnly', // Prioritize Smart Wallet/Base Account for seamless onboarding
+      version: '4',
     }),
   ],
   transports: {

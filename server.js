@@ -3,6 +3,13 @@ const path = require('path');
 const app = express();
 const port = process.env.PORT || 8080;
 
+// Set Cross-Origin-Opener-Policy header to allow Coinbase/Base Account popups
+// This is critical for the smart wallet popup to communicate back to the dapp.
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  next();
+});
+
 // Serve static files from the current directory
 app.use(express.static(__dirname));
 

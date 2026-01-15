@@ -1,5 +1,5 @@
 {
-  "name": "Base Portal AI",
+  "name": "BEND",
   "description": "Unified AI-powered hub for Base: Smart Swaps, Morpho Yield, and clanker-style Token Launcher.",
   "requestFramePermissions": [
     "camera",

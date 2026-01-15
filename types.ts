@@ -9,6 +9,7 @@ export enum Tab {
 export type TokenCategory = 'Mainnet' | 'Stables' | 'Ecosystem' | 'Governance';
 export type TokenTemplate = 'Meme' | 'Utility' | 'DeFi' | 'Custom';
 export type OrderType = 'market' | 'limit';
+export type OrderExpiry = '24h' | '7d' | '30d' | 'gtc';
 
 export interface Token {
   symbol: string;
@@ -22,7 +23,6 @@ export interface Token {
   address?: string;
 }
 
-// Added TokenApproval interface for managing asset permissions
 export interface TokenApproval {
   symbol: string;
   allowance: string;
@@ -36,6 +36,7 @@ export interface LimitOrder {
   amount: string;
   targetPrice: string;
   status: 'pending' | 'filled' | 'cancelled';
+  expiry: OrderExpiry;
   timestamp: number;
 }
 
