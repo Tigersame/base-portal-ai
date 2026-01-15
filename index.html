@@ -25,20 +25,21 @@
 <script type="importmap">
 {
   "imports": {
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "@farcaster/miniapp-sdk": "https://esm.sh/@farcaster/miniapp-sdk@^0.2.1",
-    "@coinbase/onchainkit": "https://esm.sh/@coinbase/onchainkit@^1.1.0",
-    "@coinbase/onchainkit/": "https://esm.sh/@coinbase/onchainkit@^1.1.0/",
-    "viem": "https://esm.sh/viem@^2.21.0",
-    "viem/": "https://esm.sh/viem@^2.21.0/",
-    "wagmi": "https://esm.sh/wagmi@^2.16.0",
-    "wagmi/": "https://esm.sh/wagmi@^2.16.0/",
-    "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@^5.66.0"
+    "react": "https://esm.sh/react@19.0.0",
+    "react/": "https://esm.sh/react@19.0.0/",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/": "https://esm.sh/react-dom@19.0.0/",
+    "recharts": "https://esm.sh/recharts@3.6.0?deps=react@19.0.0,react-dom@19.0.0",
+    "@google/genai": "https://esm.sh/@google/genai@1.35.0",
+    "lucide-react": "https://esm.sh/lucide-react@0.462.0?deps=react@19.0.0",
+    "@farcaster/miniapp-sdk": "https://esm.sh/@farcaster/miniapp-sdk@0.2.1",
+    "@coinbase/onchainkit": "https://esm.sh/@coinbase/onchainkit@1.1.0?deps=react@19.0.0,react-dom@19.0.0",
+    "@coinbase/onchainkit/": "https://esm.sh/@coinbase/onchainkit@1.1.0?deps=react@19.0.0,react-dom@19.0.0&/",
+    "viem": "https://esm.sh/viem@2.21.0",
+    "viem/": "https://esm.sh/viem@2.21.0/",
+    "wagmi": "https://esm.sh/wagmi@2.16.0?deps=react@19.0.0,react-dom@19.0.0",
+    "wagmi/": "https://esm.sh/wagmi@2.16.0?deps=react@19.0.0,react-dom@19.0.0&/",
+    "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@5.66.0?deps=react@19.0.0,react-dom@19.0.0"
   }
 }
 </script>
@@ -61,6 +62,7 @@
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    margin: 0;
   }
   /* OnchainKit Overrides */
   .ock-wallet-container {
