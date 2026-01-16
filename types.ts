@@ -21,6 +21,8 @@ export interface Token {
   category: TokenCategory;
   iconUrl?: string;
   address?: string;
+  decimals?: number;
+  isNative?: boolean;
 }
 
 export interface TokenApproval {

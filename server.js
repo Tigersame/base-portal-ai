@@ -10,12 +10,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from the current directory
-app.use(express.static(__dirname));
+const distDir = path.join(__dirname, 'dist');
+
+// Serve static files from the Vite build output
+app.use(express.static(distDir));
 
 // Support SPA routing by falling back to index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(distDir, 'index.html'));
 });
 
 app.listen(port, '0.0.0.0', () => {

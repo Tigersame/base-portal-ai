@@ -1,13 +1,27 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { Buffer } from 'buffer';
+import './styles.css';
+import '@coinbase/onchainkit/styles.css';
 import App from './App';
+import { Providers } from './providers';
 import { http, createConfig, WagmiProvider } from 'wagmi';
 import { base } from 'viem/chains';
 import { coinbaseWallet } from 'wagmi/connectors';
 import { OnchainKitProvider } from '@coinbase/onchainkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
+// Ensure Buffer is available for browser bundles that depend on it.
+(globalThis as any).Buffer = (globalThis as any).Buffer || Buffer;
+
 const queryClient = new QueryClient();
+
+const infuraId =
+  (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_INFURA_ID') : null) ||
+  (import.meta.env.VITE_INFURA_ID as string | undefined);
+const baseRpcUrl = infuraId
+  ? `https://base-mainnet.infura.io/v3/${infuraId}`
+  : 'https://mainnet.base.org';
 
 const wagmiConfig = createConfig({
   chains: [base],
@@ -19,7 +33,7 @@ const wagmiConfig = createConfig({
     }),
   ],
   transports: {
-    [base.id]: http(),
+    [base.id]: http(baseRpcUrl),
   },
 });
 
@@ -33,12 +47,9 @@ root.render(
   <React.StrictMode>
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <OnchainKitProvider
-          apiKey={process.env.API_KEY || ''}
-          chain={base}
-        >
+        <Providers>
           <App />
-        </OnchainKitProvider>
+        </Providers>
       </QueryClientProvider>
     </WagmiProvider>
   </React.StrictMode>

@@ -88,10 +88,18 @@ export const SearchableTokenSelector: React.FC<{
 
   const handleImport = async () => {
     if (!isAddress) return;
+    if (!onImport) {
+      setImportError("Token import is disabled.");
+      return;
+    }
     setIsImporting(true);
     setImportError(null);
     try {
       const metadata = await fetchTokenMetadata(search);
+      if (!metadata) {
+        setImportError("Token metadata unavailable.");
+        return;
+      }
       const newToken: Token = {
         ...metadata,
         address: search,
@@ -180,10 +188,10 @@ export const SearchableTokenSelector: React.FC<{
                     <Button 
                       onClick={handleImport} 
                       className="w-full"
-                      disabled={isImporting}
+                      disabled={isImporting || !onImport}
                     >
                       {isImporting ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
-                      {isImporting ? 'Syncing...' : 'Import to Portal'}
+                      {!onImport ? 'Import Disabled' : isImporting ? 'Syncing...' : 'Import to Portal'}
                     </Button>
                  </div>
                  {importError && (

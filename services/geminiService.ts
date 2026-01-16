@@ -1,8 +1,21 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SentimentPoint, CandleData } from "../types";
+import { AIInsight, SentimentPoint, CandleData } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let ai: GoogleGenAI | null = null;
+let lastApiKey: string | null = null;
+
+const getClient = () => {
+  const runtimeKey = (typeof localStorage !== 'undefined' ? localStorage.getItem('GEMINI_API_KEY') : null) ||
+    process.env.GEMINI_API_KEY ||
+    process.env.API_KEY;
+  if (!runtimeKey) return null;
+  if (!ai || runtimeKey !== lastApiKey) {
+    ai = new GoogleGenAI({ apiKey: runtimeKey });
+    lastApiKey = runtimeKey;
+  }
+  return ai;
+};
 
 // Simple In-Memory Cache to prevent repeated hits for same data
 const cache = new Map<string, { data: any, timestamp: number }>();
@@ -59,15 +72,20 @@ export const getHistoricalPriceData = async (timeframe: string): Promise<CandleD
   return data;
 };
 
-export const getMarketInsights = async (marketData: any) => {
+export const getMarketInsights = async (marketData: any): Promise<AIInsight | null> => {
   const cacheKey = `insights_${JSON.stringify(marketData.map((t: any) => t.symbol))}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < INSIGHTS_CACHE_TTL) {
     return cached.data;
   }
 
+  const client = getClient();
+  if (!client) {
+    return null;
+  }
+
   try {
-    const response = await callWithRetry(() => ai.models.generateContent({
+    const response = await callWithRetry(() => client.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Analyze this Base chain portfolio and market data. Provide Nansen-style professional insights, including smart money alerts and risk warnings. Data: ${JSON.stringify(marketData)}`,
       config: {
@@ -92,13 +110,8 @@ export const getMarketInsights = async (marketData: any) => {
     cache.set(cacheKey, { data, timestamp: Date.now() });
     return data;
   } catch (e) {
-    console.error("Gemini failed, using fallback insights", e);
-    return {
-      summary: "Market analysis is currently using cached or default data due to high network demand.",
-      recommendation: "Hold positions and monitor official Base ecosystem updates.",
-      marketSentiment: "Neutral",
-      alerts: ["Real-time Analysis Throttled", "Smart Money: Watching ETH entry levels"]
-    };
+    console.error("Gemini failed to fetch insights", e);
+    return null;
   }
 };
 
@@ -126,14 +139,19 @@ export const getHistoricalSentiment = async (): Promise<SentimentPoint[]> => {
 };
 
 export const generateTokenDescription = async (name: string, symbol: string) => {
+  const client = getClient();
+  if (!client) {
+    return '';
+  }
+
   try {
-    const response = await callWithRetry(() => ai.models.generateContent({
+    const response = await callWithRetry(() => client.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Generate a catchy, high-engagement marketing description for a new Base chain token named ${name} ($${symbol}). It should sound like it was launched on Clanker or Farcaster. Max 80 characters.`,
     }));
     return response.text;
   } catch (e) {
-    return `A revolutionary new asset on Base: ${name} ($${symbol}). Built for the community.`;
+    return '';
   }
 };
 
@@ -144,8 +162,13 @@ export const getSwapQuote = async (from: string, to: string, amount: string) => 
     return cached.data;
   }
 
+  const client = getClient();
+  if (!client) {
+    return null;
+  }
+
   try {
-    const response = await callWithRetry(() => ai.models.generateContent({
+    const response = await callWithRetry(() => client.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Simulate a live swap quote for ${amount} ${from} to ${to} on Base chain. Include price impact, network fee, slippage, and a mock route.`,
       config: {
@@ -168,25 +191,19 @@ export const getSwapQuote = async (from: string, to: string, amount: string) => 
     cache.set(cacheKey, { data, timestamp: Date.now() });
     return data;
   } catch (e) {
-    console.error("Gemini swap quote failed, using local mock", e);
-    // Rough mock logic
-    const mockRatio = from === 'ETH' ? 2840 : (from === 'USDC' ? 0.00035 : 1);
-    const out = (parseFloat(amount) * mockRatio).toFixed(4);
-    const fallback = {
-      outputAmount: out,
-      priceImpact: "0.15%",
-      route: "Aerodrome (Direct)",
-      fee: "0.0001 ETH",
-      slippage: "0.5%",
-      networkFeeUsd: "0.05"
-    };
-    return fallback;
+    console.error("Gemini swap quote failed", e);
+    return null;
   }
 };
 
 export const fetchTokenMetadata = async (address: string) => {
+  const client = getClient();
+  if (!client) {
+    return null;
+  }
+
   try {
-    const response = await callWithRetry(() => ai.models.generateContent({
+    const response = await callWithRetry(() => client.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Act as a blockchain indexer for the Base network. Return metadata for the ERC-20 contract address: ${address}. If the address is unknown, create plausible metadata for a new project.`,
       config: {
@@ -206,12 +223,6 @@ export const fetchTokenMetadata = async (address: string) => {
     }));
     return JSON.parse(response.text);
   } catch (e) {
-    return {
-      name: "Unknown Asset",
-      symbol: "UNK",
-      price: 1.0,
-      change24h: 0,
-      iconUrl: ""
-    };
+    return null;
   }
 };

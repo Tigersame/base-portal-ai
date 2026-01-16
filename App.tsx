@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { sdk } from '@farcaster/miniapp-sdk';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer
@@ -56,13 +56,17 @@ import {
   WalletDropdownBasename
 } from '@coinbase/onchainkit/wallet';
 import { Address, Avatar, Name, Identity, EthBalance } from '@coinbase/onchainkit/identity';
-import { useAccount } from 'wagmi';
+import { useAccount, useBalance, useReadContracts, useWalletClient } from 'wagmi';
+import { base } from 'viem/chains';
+import { erc20Abi, formatUnits } from 'viem';
 
 import { Tab, Token, MorphoVault, TokenCategory, TokenTemplate, AIInsight, TokenLaunchConfig, OrderType, LimitOrder, OrderExpiry } from './types';
 import { Card, Button, Modal, SearchableTokenSelector } from './components/UI';
-import { getMarketInsights, generateTokenDescription, getSwapQuote } from './services/geminiService';
+import { getMarketInsights, generateTokenDescription } from './services/geminiService';
+import { getSwapQuote } from './services/swapService';
 
 const COLORS = ['#0052FF', '#00C49F', '#FFBB28', '#FF8042', '#8A2BE2'];
+const PieAny = Pie as unknown as React.ComponentType<any>;
 
 const TEMPLATE_PRESETS: Record<TokenTemplate, Partial<TokenLaunchConfig>> = {
   Meme: { buyTax: '5', sellTax: '5', burnRate: '2', lockPeriod: '1 Year' },
@@ -75,62 +79,50 @@ const INITIAL_TOKENS: Token[] = [
   { 
     symbol: 'ETH', 
     name: 'Ethereum', 
-    price: 2842.12, 
-    change24h: 3.2, 
-    balance: 1.5, 
+    price: 0, 
+    change24h: 0, 
+    balance: 0, 
     icon: 'E',
     category: 'Mainnet',
     iconUrl: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
-    address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+    isNative: true,
+    decimals: 18,
   },
   { 
     symbol: 'cbBTC', 
     name: 'Coinbase Wrapped BTC', 
-    price: 94210.50, 
-    change24h: 1.4, 
-    balance: 0.02, 
+    price: 0, 
+    change24h: 0, 
+    balance: 0, 
     icon: 'B',
     category: 'Mainnet',
     iconUrl: 'https://assets.coingecko.com/coins/images/39535/small/cbbtc.png',
-    address: '0xcbB7C00002968E65348665a53B821F644A81717c'
+    address: '0xcbB7C00002968E65348665a53B821F644A81717c',
+    decimals: 8,
   },
   { 
     symbol: 'USDC', 
     name: 'USDC', 
-    price: 1.00, 
-    change24h: 0.01, 
-    balance: 4263.18, 
+    price: 0, 
+    change24h: 0, 
+    balance: 0, 
     icon: 'U',
     category: 'Stables',
     iconUrl: 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
-    address: '0x833589fCD6eDb6E08f4c7C32f4f71b54bdA02913'
+    address: '0x833589fCD6eDb6E08f4c7C32f4f71b54bdA02913',
+    decimals: 6,
   },
   { 
     symbol: 'DEGEN', 
     name: 'Degen Token', 
-    price: 0.012, 
-    change24h: -12.4, 
-    balance: 500000, 
+    price: 0, 
+    change24h: 0, 
+    balance: 0, 
     icon: 'D',
     category: 'Ecosystem',
     iconUrl: 'https://assets.coingecko.com/coins/images/34515/small/degen.png',
-    address: '0x4ed4E8615216599b5966f03441F2282aE651ed9d'
-  }
-];
-
-const INITIAL_MORPHO_VAULTS: MorphoVault[] = [
-  {
-    address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-    name: 'USDC MetaVault',
-    asset: { symbol: 'USDC', address: '0x833589fCD6eDb6E08f4c7C32f4f71b54bdA02913', decimals: 6 },
-    totalApy: 12.45,
-    nativeApy: 8.2,
-    vaultFee: 0.01,
-    deposits: '1.2M',
-    liquidity: '850K',
-    rewards: [{ asset: '0xmorpho', assetName: 'MORPHO', apy: 4.25 }],
-    balance: '0',
-    interestEarned: '0'
+    address: '0x4ed4E8615216599b5966f03441F2282aE651ed9d',
+    decimals: 18,
   }
 ];
 
@@ -159,17 +151,60 @@ const App: React.FC = () => {
   const [showFarcasterMenu, setShowFarcasterMenu] = useState(false);
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
+  const [apiKeys, setApiKeys] = useState({ infuraId: '', zeroXKey: '', geminiKey: '' });
+  const [apiStatus, setApiStatus] = useState<string | null>(null);
   
   const [localNotificationsActive, setLocalNotificationsActive] = useState(() => {
     const saved = localStorage.getItem('portal_notifications_active');
     return saved === null ? true : saved === 'true';
   });
 
-  const [availableTokens] = useState<Token[]>(INITIAL_TOKENS);
+  const { data: nativeBalance } = useBalance({
+    address: onchainAddress,
+    chainId: base.id,
+    query: {
+      enabled: Boolean(onchainAddress),
+    },
+  });
+
+  const erc20Tokens = useMemo(
+    () => INITIAL_TOKENS.filter(token => !token.isNative && token.address),
+    []
+  );
+
+  const { data: erc20Balances } = useReadContracts({
+    contracts: erc20Tokens.map(token => ({
+      address: token.address as `0x${string}`,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [onchainAddress],
+      chainId: base.id,
+    })),
+    query: {
+      enabled: Boolean(onchainAddress) && erc20Tokens.length > 0,
+    },
+  });
+
+  const { data: walletClient } = useWalletClient();
+
+  const availableTokens = useMemo(() => {
+    return INITIAL_TOKENS.map((token, index) => {
+      if (token.isNative) {
+        const balance = parseFloat(nativeBalance?.formatted ?? '0');
+        return { ...token, balance };
+      }
+
+      const erc20Index = erc20Tokens.findIndex(t => t.symbol === token.symbol);
+      const erc20Result = erc20Index >= 0 ? erc20Balances?.[erc20Index]?.result : undefined;
+      const decimals = token.decimals ?? 18;
+      const balance = erc20Result ? parseFloat(formatUnits(erc20Result as bigint, decimals)) : 0;
+      return { ...token, balance };
+    });
+  }, [nativeBalance?.formatted, erc20Balances, erc20Tokens]);
   const [activePieIndex, setActivePieIndex] = useState(0);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   
-  const [vaults] = useState<MorphoVault[]>(INITIAL_MORPHO_VAULTS);
+  const [vaults] = useState<MorphoVault[]>([]);
   const [selectedVault, setSelectedVault] = useState<MorphoVault | null>(null);
   const [earnAmount, setEarnAmount] = useState('');
 
@@ -181,6 +216,13 @@ const App: React.FC = () => {
   const [orderExpiry, setOrderExpiry] = useState<OrderExpiry>('gtc');
   const [limitOrders, setLimitOrders] = useState<LimitOrder[]>([]);
 
+  useEffect(() => {
+    const nextFrom = availableTokens.find(token => token.symbol === swapFrom.symbol) || availableTokens[0];
+    const nextTo = availableTokens.find(token => token.symbol === swapTo.symbol) || availableTokens[1] || availableTokens[0];
+    if (nextFrom) setSwapFrom(nextFrom);
+    if (nextTo) setSwapTo(nextTo);
+  }, [availableTokens]);
+
   const [swapQuote, setSwapQuote] = useState<any>(null);
   const [showSwapConfirm, setShowSwapConfirm] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -188,6 +230,7 @@ const App: React.FC = () => {
   const [isSwapping, setIsSwapping] = useState(false);
   const [isRefreshingQuote, setIsRefreshingQuote] = useState(false);
   const [refreshCountdown, setRefreshCountdown] = useState(30);
+  const quoteInFlight = useRef(false);
 
   const [launchConfig, setLaunchConfig] = useState<TokenLaunchConfig>({
     name: '', symbol: '', supply: '1000000000', initialLiquidity: '1.0', description: '', image: '',
@@ -217,6 +260,16 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!showSettings) return;
+    setApiKeys({
+      infuraId: localStorage.getItem('VITE_INFURA_ID') || '',
+      zeroXKey: localStorage.getItem('VITE_0X_API_KEY') || '',
+      geminiKey: localStorage.getItem('GEMINI_API_KEY') || '',
+    });
+    setApiStatus(null);
+  }, [showSettings]);
+
+  useEffect(() => {
     localStorage.setItem('portal_notifications_active', localNotificationsActive.toString());
   }, [localNotificationsActive]);
 
@@ -229,14 +282,23 @@ const App: React.FC = () => {
 
   const handleFetchQuote = useCallback(async (isSilent = false) => {
     if (!swapAmount || isNaN(parseFloat(swapAmount)) || parseFloat(swapAmount) <= 0) return;
+    if (quoteInFlight.current) return;
     if (!isSilent) setIsRefreshingQuote(true);
     try {
-      const quote = await getSwapQuote(swapFrom.symbol, swapTo.symbol, swapAmount);
+      quoteInFlight.current = true;
+      const quote = await getSwapQuote(swapFrom, swapTo, swapAmount, onchainAddress);
+      if (!quote) {
+        setSwapQuote(null);
+        return;
+      }
       setSwapQuote(quote);
       setRefreshCountdown(30);
     } catch (e) { console.error(e); } 
-    finally { setIsRefreshingQuote(false); }
-  }, [swapFrom.symbol, swapTo.symbol, swapAmount]);
+    finally {
+      quoteInFlight.current = false;
+      setIsRefreshingQuote(false);
+    }
+  }, [swapFrom, swapTo, swapAmount]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -246,18 +308,12 @@ const App: React.FC = () => {
   }, [swapFrom, swapTo, swapAmount, handleFetchQuote]);
 
   useEffect(() => {
-    if (activeTab !== Tab.SWAP) return;
+    if (activeTab !== Tab.SWAP || !swapQuote) return;
     const timer = setInterval(() => {
-      setRefreshCountdown(prev => {
-        if (prev <= 1) {
-          handleFetchQuote(true);
-          return 30;
-        }
-        return prev - 1;
-      });
+      setRefreshCountdown(prev => Math.max(prev - 1, 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [handleFetchQuote, activeTab]);
+  }, [swapQuote, activeTab]);
 
   const handleSignInFarcaster = async () => {
     setIsConnectingFarcaster(true);
@@ -275,33 +331,29 @@ const App: React.FC = () => {
     }
   };
 
-  const handleExecuteSwap = () => {
+  const handleExecuteSwap = async () => {
+    if (orderType === 'limit') {
+      return;
+    }
+    if (!walletClient || !swapQuote) return;
+
     setIsSwapping(true);
-    setTimeout(() => {
-      if (orderType === 'limit') {
-        const newOrder: LimitOrder = {
-          id: Math.random().toString(36).slice(2, 9),
-          fromToken: swapFrom.symbol,
-          toToken: swapTo.symbol,
-          amount: swapAmount,
-          targetPrice: targetPrice,
-          status: 'pending',
-          expiry: orderExpiry,
-          timestamp: Date.now()
-        };
-        setLimitOrders(prev => [newOrder, ...prev]);
-      }
-      
-      setIsSwapping(false);
+    try {
+      const hash = await walletClient.sendTransaction({
+        account: walletClient.account,
+        to: swapQuote.to,
+        data: swapQuote.data,
+        value: swapQuote.value ? BigInt(swapQuote.value) : undefined,
+        gas: swapQuote.gas ? BigInt(swapQuote.gas) : undefined,
+      } as any);
       setShowSwapConfirm(false);
-      if (orderType === 'market') {
-        setSwapAmount('');
-        sdk.actions.openUrl(`https://basescan.org/address/${onchainAddress || '0x...'}`);
-      } else {
-        setSwapAmount('');
-        setTargetPrice('');
-      }
-    }, 1500);
+      setSwapAmount('');
+      sdk.actions.openUrl(`https://basescan.org/tx/${hash}`);
+    } catch (e) {
+      console.error("Swap failed", e);
+    } finally {
+      setIsSwapping(false);
+    }
   };
 
   const handleCancelOrder = (id: string) => {
@@ -349,6 +401,14 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSaveApiKeys = () => {
+    localStorage.setItem('VITE_INFURA_ID', apiKeys.infuraId.trim());
+    localStorage.setItem('VITE_0X_API_KEY', apiKeys.zeroXKey.trim());
+    localStorage.setItem('GEMINI_API_KEY', apiKeys.geminiKey.trim());
+    setApiStatus('Saved. Reloading to apply network changes...');
+    setTimeout(() => window.location.reload(), 500);
+  };
+
   const currentRate = useMemo(() => {
     if (!swapQuote?.outputAmount || !swapAmount || parseFloat(swapAmount) === 0) return null;
     return (parseFloat(swapQuote.outputAmount) / parseFloat(swapAmount)).toFixed(6);
@@ -359,6 +419,8 @@ const App: React.FC = () => {
     const diff = ((parseFloat(targetPrice) / parseFloat(currentRate)) - 1) * 100;
     return diff.toFixed(2);
   }, [currentRate, targetPrice]);
+
+  const isQuoteAvailable = Boolean(swapQuote);
 
   const handleApplyTemplate = (template: TokenTemplate) => {
     setLaunchConfig(prev => ({ ...prev, template, ...TEMPLATE_PRESETS[template] }));
@@ -411,7 +473,7 @@ const App: React.FC = () => {
     availableTokens.forEach(t => {
       if (groups[t.category]) {
         groups[t.category].tokens.push(t);
-        groups[t.category].totalValue += t.balance * t.price;
+        groups[t.category].totalValue += t.balance;
       }
     });
     return Object.entries(groups).map(([name, data]) => ({ name, value: data.totalValue, tokens: data.tokens }));
@@ -426,12 +488,19 @@ const App: React.FC = () => {
               <PortalLogo />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tighter leading-none text-white uppercase italic">Portal AI</h1>
-              <p className="text-[10px] text-blue-500 font-black uppercase tracking-[0.2em] mt-1">Base Ecosystem</p>
+              <h1 className="text-xl font-black tracking-tighter leading-none text-white uppercase italic">BLEND</h1>
+              <p className="text-[10px] text-blue-500 font-black uppercase tracking-[0.2em] mt-1">BLEND</p>
             </div>
           </div>
           
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="w-10 h-10 rounded-2xl border border-[#222] bg-[#111] text-gray-400 hover:text-white hover:border-[#333] transition-all flex items-center justify-center"
+              aria-label="Open settings"
+            >
+              <Settings2 size={18} />
+            </button>
             <Wallet>
               <ConnectWallet className="bg-[#0052FF] hover:bg-[#0042CC] text-white px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-wider flex items-center gap-2 transition-all shadow-[0_4px_20px_rgba(0,82,255,0.4)] h-10 border-none">
                 <WalletIcon size={14} /> Connect
@@ -634,10 +703,10 @@ const App: React.FC = () => {
 
               <Button 
                 onClick={() => (farcasterUser || isConnected) ? setShowSwapConfirm(true) : handleSignInFarcaster()} 
-                disabled={orderType === 'limit' && (!targetPrice || parseFloat(targetPrice) <= 0)}
+                disabled={!isQuoteAvailable || orderType === 'limit'}
                 className={`w-full py-5 text-lg rounded-[28px] ${(!farcasterUser && !isConnected) ? 'bg-[#8a63d2]' : ''}`}
               >
-                {(!farcasterUser && !isConnected) ? 'Sync Identity' : orderType === 'limit' ? 'Place Limit Order' : 'Review Swap'}
+                {orderType === 'limit' ? 'Limit Unavailable' : !isQuoteAvailable ? 'Quotes Unavailable' : (!farcasterUser && !isConnected) ? 'Sync Identity' : 'Review Swap'}
               </Button>
             </div>
 
@@ -881,17 +950,17 @@ const App: React.FC = () => {
                  <div className="space-y-6 animate-in fade-in">
                     <Card className="p-8 rounded-[40px] border-[#222] bg-[#0A0A0A] overflow-hidden relative shadow-2xl border-t-blue-500/20 border-t-2">
                       <div className="flex flex-col items-center">
-                        <div className="h-64 w-full relative">
-                          <ResponsiveContainer width="100%" height="100%">
+                        <div className="w-full min-w-0 min-h-[240px] relative">
+                          <ResponsiveContainer width="100%" height={240}>
                             <PieChart>
-                              <Pie activeIndex={activePieIndex as any} data={portfolioCategories} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value" onMouseEnter={(_, index) => setActivePieIndex(index)}>
+                              <PieAny activeIndex={activePieIndex as any} data={portfolioCategories} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value" onMouseEnter={(_: any, index: number) => setActivePieIndex(index)}>
                                 {portfolioCategories.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} stroke="none" className="outline-none" />)}
-                              </Pie>
+                              </PieAny>
                             </PieChart>
                           </ResponsiveContainer>
                           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Net Value</span>
-                            <span className="text-2xl font-black text-white tabular-nums">${portfolioCategories.reduce((acc, curr) => acc + curr.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Balance</span>
+                            <span className="text-2xl font-black text-white tabular-nums">{portfolioCategories.reduce((acc, curr) => acc + curr.value, 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
                           </div>
                         </div>
                       </div>
@@ -914,7 +983,7 @@ const App: React.FC = () => {
                          </div>
                       </div>
                     ) : (
-                      <div className="h-24 bg-[#111] animate-pulse rounded-[32px] flex items-center justify-center text-gray-700 font-black uppercase tracking-[0.2em] text-xs">AI Analyzing...</div>
+                      <div className="h-24 bg-[#111] rounded-[32px] flex items-center justify-center text-gray-700 font-black uppercase tracking-[0.2em] text-xs">AI Insights Unavailable</div>
                     )}
                  </div>
               )}
@@ -924,22 +993,28 @@ const App: React.FC = () => {
         {activeTab === Tab.EARN && (
           <div className="space-y-6 animate-in fade-in pb-12">
             <h2 className="text-3xl font-black tracking-tighter text-white uppercase italic px-1">EARN</h2>
-             {!selectedVault ? (
-                <div className="grid grid-cols-1 gap-4">
-                  {vaults.map((vault) => (
-                    <Card key={vault.address} className="p-6 flex justify-between items-center cursor-pointer hover:border-blue-500/30 transition-all group bg-[#0A0A0A]" onClick={() => setSelectedVault(vault)}>
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all shadow-inner"><TrendingUp size={24} /></div>
-                        <div><h3 className="font-black text-white text-sm uppercase tracking-tight">{vault.name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{vault.asset.symbol} Morpho Vault</p></div>
-                      </div>
-                      <div className="text-right"><div className="text-2xl font-black text-green-400 tabular-nums">{vault.totalApy}%</div><p className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Total APY</p></div>
-                    </Card>
-                  ))}
-                  <div className="p-4 rounded-3xl border border-dashed border-[#222] flex items-center gap-3 opacity-60">
-                     <ShieldAlert size={18} className="text-yellow-500" />
-                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-relaxed">Vaults are curated by Morpho Blue. Ensure you understand underlying risks.</p>
+            {!selectedVault ? (
+                vaults.length === 0 ? (
+                  <Card className="p-8 text-center border-[#222] bg-[#0A0A0A] rounded-[32px]">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Vault data unavailable</p>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {vaults.map((vault) => (
+                      <Card key={vault.address} className="p-6 flex justify-between items-center cursor-pointer hover:border-blue-500/30 transition-all group bg-[#0A0A0A]" onClick={() => setSelectedVault(vault)}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all shadow-inner"><TrendingUp size={24} /></div>
+                          <div><h3 className="font-black text-white text-sm uppercase tracking-tight">{vault.name}</h3><p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{vault.asset.symbol} Morpho Vault</p></div>
+                        </div>
+                        <div className="text-right"><div className="text-2xl font-black text-green-400 tabular-nums">{vault.totalApy}%</div><p className="text-[8px] font-black text-gray-600 uppercase tracking-widest">Total APY</p></div>
+                      </Card>
+                    ))}
+                    <div className="p-4 rounded-3xl border border-dashed border-[#222] flex items-center gap-3 opacity-60">
+                       <ShieldAlert size={18} className="text-yellow-500" />
+                       <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-relaxed">Vaults are curated by Morpho Blue. Ensure you understand underlying risks.</p>
+                    </div>
                   </div>
-                </div>
+                )
              ) : (
                 <div className="space-y-6 animate-in slide-in-from-right-8">
                    <button onClick={() => setSelectedVault(null)} className="flex items-center gap-2 text-[10px] font-black text-gray-500 hover:text-white uppercase tracking-widest bg-[#111] px-4 py-2 rounded-xl border border-[#222] transition-colors"><ChevronLeft size={14} /> View All Hubs</button>
@@ -1035,8 +1110,8 @@ const App: React.FC = () => {
                  <div className="pt-4 border-t border-white/5 space-y-2.5">
                     {orderType === 'market' ? (
                       <>
-                        <div className="flex justify-between items-center group"><div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-gray-500 tracking-widest"><Activity size={10} /> Network Fee</div><span className="text-[10px] font-black text-white tabular-nums">~ ${swapQuote?.networkFeeUsd || '0.05'}</span></div>
-                        <div className="flex justify-between items-center"><div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-gray-500 tracking-widest"><Settings2 size={10} /> Slippage Tolerance</div><span className="text-[10px] font-black text-yellow-500">{swapQuote?.slippage || '0.5%'}</span></div>
+                        <div className="flex justify-between items-center group"><div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-gray-500 tracking-widest"><Activity size={10} /> Network Fee</div><span className="text-[10px] font-black text-white tabular-nums">{swapQuote?.networkFeeUsd ?? '—'}</span></div>
+                        <div className="flex justify-between items-center"><div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-gray-500 tracking-widest"><Settings2 size={10} /> Slippage Tolerance</div><span className="text-[10px] font-black text-yellow-500">{swapQuote?.slippage ?? '—'}</span></div>
                       </>
                     ) : (
                       <>
@@ -1069,6 +1144,45 @@ const App: React.FC = () => {
       {showSettings && (
         <Modal isOpen={showSettings} onClose={() => setShowSettings(false)} title="Hub Configurations">
            <div className="space-y-8 py-2">
+              <div className="bg-[#111] p-5 rounded-3xl border border-[#222] space-y-4">
+                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">API Keys</p>
+                 <p className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">These are stored locally in your browser.</p>
+                 <div className="space-y-3">
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">Infura Project ID</label>
+                      <input
+                        type="password"
+                        value={apiKeys.infuraId}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, infuraId: e.target.value }))}
+                        placeholder="VITE_INFURA_ID"
+                        className="w-full bg-black/40 border border-[#222] rounded-2xl p-3 text-xs font-bold outline-none focus:border-blue-500 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">0x API Key</label>
+                      <input
+                        type="password"
+                        value={apiKeys.zeroXKey}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, zeroXKey: e.target.value }))}
+                        placeholder="VITE_0X_API_KEY"
+                        className="w-full bg-black/40 border border-[#222] rounded-2xl p-3 text-xs font-bold outline-none focus:border-blue-500 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">Gemini API Key</label>
+                      <input
+                        type="password"
+                        value={apiKeys.geminiKey}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, geminiKey: e.target.value }))}
+                        placeholder="GEMINI_API_KEY"
+                        className="w-full bg-black/40 border border-[#222] rounded-2xl p-3 text-xs font-bold outline-none focus:border-blue-500 text-white"
+                      />
+                    </div>
+                 </div>
+                 <Button onClick={handleSaveApiKeys} className="w-full rounded-[24px]">Save API Keys</Button>
+                 {apiStatus && <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{apiStatus}</p>}
+              </div>
+
               <div className="bg-[#111] p-5 rounded-3xl border border-[#222] transition-all hover:border-[#8a63d2]/30">
                  <div className="flex justify-between items-center mb-4">
                     <div className="overflow-hidden">
