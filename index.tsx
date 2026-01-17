@@ -34,13 +34,19 @@ const isFarcasterMiniApp = detectFarcasterMiniApp();
 
 const queryClient = new QueryClient();
 
-// Prioritize reliable public RPCs - Base public RPC first
-// Skip Infura if it causes issues (401/disabled)
-const rpcUrls = [
-  'https://mainnet.base.org',
-  'https://base.meowrpc.com',
-  'https://rpc.ankr.com/base',
-];
+// RPC Configuration: Alchemy (primary) + QuickNode (fallback) + Base Public (fallback)
+const alchemyKey = import.meta.env.VITE_ALCHEMY_API_KEY as string | undefined;
+const quicknodeUrl = import.meta.env.VITE_QUICKNODE_URL as string | undefined;
+
+const rpcUrls: string[] = [];
+
+if (alchemyKey) {
+  rpcUrls.push(`https://base-mainnet.g.alchemy.com/v2/${alchemyKey}`);
+}
+if (quicknodeUrl) {
+  rpcUrls.push(quicknodeUrl);
+}
+rpcUrls.push('https://mainnet.base.org');
 
 const primaryRpc = rpcUrls[0];
 
