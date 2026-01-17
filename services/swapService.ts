@@ -2,8 +2,9 @@ import { formatUnits, parseUnits } from 'viem';
 import { Token } from '../types';
 
 const ZERO_X_PROXY_URL = '/api/swap-quote';
-const ZERO_X_DIRECT_URL = 'https://base.api.0x.org/swap/v1/quote';
+const ZERO_X_DIRECT_URL = 'https://api.0x.org/swap/allowance-holder/quote';
 const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+const BASE_CHAIN_ID = '8453';
 
 const getZeroXApiKey = () => {
   if (typeof localStorage !== 'undefined') {
@@ -12,16 +13,31 @@ const getZeroXApiKey = () => {
   return (import.meta as any).env?.VITE_0X_API_KEY as string | undefined;
 };
 
-type ZeroXQuoteResponse = {
+// 0x API v2 response structure
+type ZeroXQuoteResponseV2 = {
+  transaction: {
+    to: string;
+    data: string;
+    value: string;
+    gas: string;
+    gasPrice: string;
+  };
   buyAmount: string;
   sellAmount: string;
-  price: string;
-  guaranteedPrice?: string;
-  to: string;
-  data: string;
-  value?: string;
-  gas?: string;
-  sources?: Array<{ name: string; proportion: string }>;
+  liquidityAvailable: boolean;
+  issues?: {
+    allowance?: {
+      spender: string;
+    };
+  };
+  route?: {
+    fills: Array<{
+      from: string;
+      to: string;
+      source: string;
+      proportionBps: string;
+    }>;
+  };
 };
 
 export type SwapQuote = {
@@ -37,13 +53,13 @@ export type SwapQuote = {
   gas?: string;
 };
 
-const getRouteLabel = (sources?: Array<{ name: string; proportion: string }>) => {
-  if (!sources || sources.length === 0) return '0x';
-  const activeSources = sources
-    .filter(source => Number(source.proportion) > 0)
-    .sort((a, b) => Number(b.proportion) - Number(a.proportion))
+const getRouteLabel = (route?: { fills: Array<{ source: string; proportionBps: string }> }) => {
+  if (!route || !route.fills || route.fills.length === 0) return '0x';
+  const activeSources = route.fills
+    .filter(fill => Number(fill.proportionBps) > 0)
+    .sort((a, b) => Number(b.proportionBps) - Number(a.proportionBps))
     .slice(0, 3)
-    .map(source => source.name);
+    .map(fill => fill.source);
   return activeSources.length ? activeSources.join(', ') : '0x';
 };
 
@@ -68,19 +84,21 @@ export const getSwapQuote = async (
   const slippagePercentage = 0.005;
 
   const params = new URLSearchParams({
+    chainId: BASE_CHAIN_ID,
     sellToken,
     buyToken,
     sellAmount,
     slippagePercentage: slippagePercentage.toString(),
   });
   if (takerAddress) {
-    params.set('takerAddress', takerAddress);
+    params.set('taker', takerAddress);
   }
 
   try {
     const response = await fetch(`${ZERO_X_PROXY_URL}?${params.toString()}`, {
       headers: {
         '0x-api-key': apiKey,
+        '0x-version': 'v2',
       },
     });
 
@@ -90,7 +108,7 @@ export const getSwapQuote = async (
       
       try {
         const errorData = JSON.parse(errorText);
-        if (errorData.message?.includes('no Route matched')) {
+        if (errorData.message?.includes('no Route matched') || !errorData.liquidityAvailable) {
           console.error('No liquidity route found. Try increasing the swap amount (minimum ~0.001 ETH or $3 equivalent).');
         }
       } catch (e) {
@@ -101,6 +119,7 @@ export const getSwapQuote = async (
       const directResponse = await fetch(`${ZERO_X_DIRECT_URL}?${params.toString()}`, {
         headers: {
           '0x-api-key': apiKey,
+          '0x-version': 'v2',
         },
       });
 
@@ -110,11 +129,11 @@ export const getSwapQuote = async (
         return null;
       }
 
-      const data = (await directResponse.json()) as ZeroXQuoteResponse;
+      const data = (await directResponse.json()) as ZeroXQuoteResponseV2;
       return formatQuoteResponse(data, to, slippagePercentage);
     }
 
-    const data = (await response.json()) as ZeroXQuoteResponse;
+    const data = (await response.json()) as ZeroXQuoteResponseV2;
     return formatQuoteResponse(data, to, slippagePercentage);
   } catch (error) {
     console.error('Swap quote error:', error);
@@ -123,25 +142,29 @@ export const getSwapQuote = async (
 };
 
 function formatQuoteResponse(
-  data: ZeroXQuoteResponse,
+  data: ZeroXQuoteResponseV2,
   to: Token,
   slippagePercentage: number
 ): SwapQuote {
   const buyAmountFormatted = formatUnits(BigInt(data.buyAmount), to.decimals ?? 18);
-  const price = Number(data.price);
-  const guaranteed = Number(data.guaranteedPrice ?? data.price);
-  const priceImpact = price > 0 ? ((price - guaranteed) / price) * 100 : 0;
+  const sellAmountBigInt = BigInt(data.sellAmount);
+  const buyAmountBigInt = BigInt(data.buyAmount);
+  
+  // Calculate price impact based on buy/sell ratio
+  const priceImpact = sellAmountBigInt > 0n 
+    ? Number((sellAmountBigInt - buyAmountBigInt) * 10000n / sellAmountBigInt) / 100
+    : 0;
 
   return {
     outputAmount: buyAmountFormatted,
-    priceImpact: `${priceImpact.toFixed(2)}%`,
-    route: getRouteLabel(data.sources),
+    priceImpact: `${Math.abs(priceImpact).toFixed(2)}%`,
+    route: getRouteLabel(data.route),
     fee: '',
     slippage: `${(slippagePercentage * 100).toFixed(2)}%`,
     networkFeeUsd: '—',
-    to: data.to,
-    data: data.data,
-    value: data.value,
-    gas: data.gas,
+    to: data.transaction.to,
+    data: data.transaction.data,
+    value: data.transaction.value,
+    gas: data.transaction.gas,
   };
 }

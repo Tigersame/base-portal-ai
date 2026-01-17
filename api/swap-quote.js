@@ -16,26 +16,29 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { sellToken, buyToken, sellAmount, slippagePercentage, takerAddress } = req.query;
+    const { sellToken, buyToken, sellAmount, slippagePercentage, taker } = req.query;
     
     if (!sellToken || !buyToken || !sellAmount) {
       res.status(400).json({ error: 'Missing required parameters' });
       return;
     }
 
-    const targetUrl = new URL('https://base.api.0x.org/swap/v1/quote');
+    // 0x API v2 uses unified endpoint with chainId parameter
+    const targetUrl = new URL('https://api.0x.org/swap/allowance-holder/quote');
+    targetUrl.searchParams.set('chainId', '8453'); // Base chain
     targetUrl.searchParams.set('sellToken', sellToken);
     targetUrl.searchParams.set('buyToken', buyToken);
     targetUrl.searchParams.set('sellAmount', sellAmount);
     if (slippagePercentage) targetUrl.searchParams.set('slippagePercentage', slippagePercentage);
-    if (takerAddress) targetUrl.searchParams.set('takerAddress', takerAddress);
+    if (taker) targetUrl.searchParams.set('taker', taker);
 
-    console.log('Proxying to:', targetUrl.toString());
+    console.log('Proxying to 0x API v2:', targetUrl.toString());
 
     const response = await fetch(targetUrl.toString(), {
       method: 'GET',
       headers: {
         '0x-api-key': apiKey,
+        '0x-version': 'v2',
         'Content-Type': 'application/json',
       },
     });

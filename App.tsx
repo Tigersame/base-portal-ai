@@ -196,7 +196,7 @@ const App: React.FC = () => {
       }
 
       const erc20Index = erc20Tokens.findIndex(t => t.symbol === token.symbol);
-      const erc20Result = erc20Index >= 0 ? erc20Balances?.[erc20Index]?.result : undefined;
+      const erc20Result = (erc20Index >= 0 && erc20Balances?.[erc20Index]) ? erc20Balances[erc20Index].result : undefined;
       const decimals = token.decimals ?? 18;
       const balance = erc20Result ? parseFloat(formatUnits(erc20Result as bigint, decimals)) : 0;
       return { ...token, balance };
@@ -348,9 +348,11 @@ const App: React.FC = () => {
 
     setIsSwapping(true);
     try {
+      // For ERC20 tokens, approve the AllowanceHolder contract (0x API v2)
       if (!swapFrom.isNative && swapFrom.address && writeContractAsync) {
         try {
           const sellAmount = parseUnits(swapAmount, swapFrom.decimals ?? 18);
+          console.log('Approving AllowanceHolder:', swapQuote.to, 'for amount:', sellAmount.toString());
           
           await writeContractAsync({
             address: swapFrom.address as `0x${string}`,
@@ -359,6 +361,7 @@ const App: React.FC = () => {
             args: [swapQuote.to as `0x${string}`, sellAmount],
             chainId: base.id,
           });
+          console.log('Approval successful');
         } catch (approvalError: any) {
           console.error("Approval failed", approvalError);
           const errorMessage = approvalError?.message || approvalError?.shortMessage || 'Token approval failed';
@@ -368,6 +371,7 @@ const App: React.FC = () => {
         }
       }
 
+      console.log('Executing swap transaction...');
       const hash = await walletClient.sendTransaction({
         account: walletClient.account,
         to: swapQuote.to as `0x${string}`,
@@ -376,6 +380,7 @@ const App: React.FC = () => {
         gas: swapQuote.gas ? BigInt(swapQuote.gas) : undefined,
         chain: base,
       });
+      console.log('Swap successful, tx hash:', hash);
       setShowSwapConfirm(false);
       setSwapAmount('');
       sdk.actions.openUrl(`https://basescan.org/tx/${hash}`);
