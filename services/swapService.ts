@@ -148,8 +148,16 @@ function formatQuoteResponse(
   slippagePercentage: number
 ): SwapQuote {
   // Validate required fields
+  console.log('0x API Response:', data);
+  
   if (!data || !data.buyAmount || !data.sellAmount || !data.transaction) {
     console.error('Invalid quote response:', data);
+    console.error('Missing fields:', {
+      hasData: !!data,
+      hasBuyAmount: !!data?.buyAmount,
+      hasSellAmount: !!data?.sellAmount,
+      hasTransaction: !!data?.transaction,
+    });
     throw new Error('Invalid quote response from 0x API');
   }
 
