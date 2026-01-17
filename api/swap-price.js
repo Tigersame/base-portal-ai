@@ -23,21 +23,20 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    // 0x API v2 uses unified endpoint with chainId parameter
-    const targetUrl = new URL('https://api.0x.org/swap/allowance-holder/quote');
+    // 0x API v2 price endpoint - for getting price estimates without requiring full quote
+    const targetUrl = new URL('https://api.0x.org/swap/allowance-holder/price');
     targetUrl.searchParams.set('chainId', '8453'); // Base chain
     targetUrl.searchParams.set('sellToken', sellToken);
     targetUrl.searchParams.set('buyToken', buyToken);
     targetUrl.searchParams.set('sellAmount', sellAmount);
     // 0x API v2 uses slippageBps (basis points), not slippagePercentage
-    // Convert from decimal (0.01 = 1%) to basis points (100 = 1%)
     if (slippagePercentage) {
       const slippageBps = Math.round(parseFloat(slippagePercentage) * 10000);
       targetUrl.searchParams.set('slippageBps', slippageBps.toString());
     }
     if (taker) targetUrl.searchParams.set('taker', taker);
 
-    console.log('Proxying to 0x API v2:', targetUrl.toString());
+    console.log('Proxying to 0x Price API v2:', targetUrl.toString());
 
     const response = await fetch(targetUrl.toString(), {
       method: 'GET',
@@ -49,29 +48,11 @@ module.exports = async function handler(req, res) {
     });
 
     const body = await response.text();
-    console.log('0x API Response Status:', response.status);
-    console.log('0x API Response Body:', body);
+    console.log('0x Price API Response Status:', response.status);
+    console.log('0x Price API Response Body:', body);
     
     if (!response.ok) {
-      console.error('0x API error:', response.status, body);
-    } else {
-      // Parse and check for liquidityAvailable and issues
-      try {
-        const parsed = JSON.parse(body);
-        if (parsed.liquidityAvailable === false) {
-          console.warn('⚠️ 0x API: No liquidity available');
-          console.warn('Issues object:', JSON.stringify(parsed.issues || {}, null, 2));
-          console.warn('Request was:', {
-            sellToken,
-            buyToken, 
-            sellAmount,
-            taker,
-            slippagePercentage
-          });
-        }
-      } catch (e) {
-        console.error('Failed to parse 0x response:', e);
-      }
+      console.error('0x Price API error:', response.status, body);
     }
     
     res.status(response.status);

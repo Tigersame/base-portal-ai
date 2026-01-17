@@ -795,6 +795,11 @@ const App: React.FC = () => {
             <div className="space-y-3">
               {orderType === 'market' && swapQuote && (
                 <div className="flex flex-col gap-2 p-4 bg-[#111] rounded-2xl border border-[#222] animate-in slide-in-from-top-2">
+                  {swapQuote.isPriceOnly && (
+                    <div className="flex items-center gap-2 p-2 bg-yellow-900/30 rounded-lg border border-yellow-500/30 mb-2">
+                      <span className="text-yellow-500 text-[10px] font-semibold">Low liquidity - price estimate only. Try a larger amount (min 0.01 ETH).</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-[10px] font-black uppercase text-gray-500 tracking-widest">
                     <span>Route</span>
                     <span className="text-white">{swapQuote.route}</span>
@@ -808,10 +813,10 @@ const App: React.FC = () => {
 
               <Button 
                 onClick={() => (farcasterUser || isConnected) ? setShowSwapConfirm(true) : handleSignInFarcaster()} 
-                disabled={!isQuoteAvailable || orderType === 'limit'}
+                disabled={!isQuoteAvailable || orderType === 'limit' || swapQuote?.isPriceOnly}
                 className={`w-full py-5 text-lg rounded-[28px] ${(!farcasterUser && !isConnected) ? 'bg-[#8a63d2]' : ''}`}
               >
-                {orderType === 'limit' ? 'Limit Unavailable' : !isQuoteAvailable ? 'Quotes Unavailable' : (!farcasterUser && !isConnected) ? 'Sync Identity' : 'Review Swap'}
+                {orderType === 'limit' ? 'Limit Unavailable' : swapQuote?.isPriceOnly ? 'Price Estimate Only' : !isQuoteAvailable ? 'Quotes Unavailable' : (!farcasterUser && !isConnected) ? 'Sync Identity' : 'Review Swap'}
               </Button>
             </div>
 
