@@ -82,7 +82,7 @@ export const getSwapQuote = async (
   const sellToken = from.isNative ? NATIVE_TOKEN_ADDRESS : from.address!;
   const buyToken = to.isNative ? NATIVE_TOKEN_ADDRESS : to.address!;
   const sellAmount = parseUnits(amount, from.decimals ?? 18).toString();
-  const slippagePercentage = 0.005;
+  const slippagePercentage = 0.01; // Increased to 1% for better liquidity routing
 
   const params = new URLSearchParams({
     chainId: BASE_CHAIN_ID,
@@ -158,6 +158,12 @@ function formatQuoteResponse(
 ): SwapQuote {
   // Validate required fields
   console.log('0x API Response:', data);
+  
+  // Check for liquidity issue first
+  if (data?.liquidityAvailable === false) {
+    console.warn('0x API: No liquidity route found', data);
+    throw new Error('No liquidity route found. Try increasing the swap amount or use different tokens (ETH, USDC, WETH).');
+  }
   
   if (!data || !data.buyAmount || !data.sellAmount || !data.transaction) {
     console.error('Invalid quote response:', data);
