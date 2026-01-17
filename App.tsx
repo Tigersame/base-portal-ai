@@ -241,10 +241,19 @@ const App: React.FC = () => {
   const [limitOrders, setLimitOrders] = useState<LimitOrder[]>([]);
 
   useEffect(() => {
+    if (availableTokens.length < 2) return;
+    
     const nextFrom = availableTokens.find(token => token.symbol === swapFrom.symbol) || availableTokens[0];
-    const nextTo = availableTokens.find(token => token.symbol === swapTo.symbol) || availableTokens[1] || availableTokens[0];
-    if (nextFrom) setSwapFrom(nextFrom);
-    if (nextTo) setSwapTo(nextTo);
+    let nextTo = availableTokens.find(token => token.symbol === swapTo.symbol);
+    
+    if (!nextTo || nextTo.symbol === nextFrom.symbol) {
+      nextTo = availableTokens.find(token => token.symbol !== nextFrom.symbol) || availableTokens[1];
+    }
+    
+    if (nextFrom && nextTo && nextFrom.symbol !== nextTo.symbol) {
+      setSwapFrom(nextFrom);
+      setSwapTo(nextTo);
+    }
   }, [availableTokens]);
 
   const [swapQuote, setSwapQuote] = useState<any>(null);
@@ -696,7 +705,12 @@ const App: React.FC = () => {
                       Max
                     </button>
                   </div>
-                  <SearchableTokenSelector tokens={availableTokens} selectedToken={swapFrom} onSelect={(t) => setSwapFrom(t)} label="Sell" />
+                  <SearchableTokenSelector tokens={availableTokens} selectedToken={swapFrom} onSelect={(t) => {
+                    if (t.symbol === swapTo.symbol) {
+                      setSwapTo(swapFrom);
+                    }
+                    setSwapFrom(t);
+                  }} label="Sell" />
                 </div>
                 {parseFloat(swapAmount) > 0 && parseFloat(swapAmount) < 0.001 && (
                   <div className="mt-2 text-[10px] font-bold text-yellow-500/80">
@@ -734,7 +748,12 @@ const App: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <SearchableTokenSelector tokens={availableTokens} selectedToken={swapTo} onSelect={(t) => setSwapTo(t)} label="Buy" />
+                  <SearchableTokenSelector tokens={availableTokens} selectedToken={swapTo} onSelect={(t) => {
+                    if (t.symbol === swapFrom.symbol) {
+                      setSwapFrom(swapTo);
+                    }
+                    setSwapTo(t);
+                  }} label="Buy" />
                 </div>
               </div>
             </Card>

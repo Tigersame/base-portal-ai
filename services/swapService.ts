@@ -100,6 +100,12 @@ export const getSwapQuote = async (
 
   const sellToken = from.isNative ? NATIVE_TOKEN_ADDRESS : from.address!;
   const buyToken = to.isNative ? NATIVE_TOKEN_ADDRESS : to.address!;
+
+  if (sellToken.toLowerCase() === buyToken.toLowerCase()) {
+    console.error('Cannot swap a token for itself');
+    throw new Error('Cannot swap a token for itself. Please select different tokens.');
+  }
+
   const sellAmount = parseUnits(amount, from.decimals ?? 18).toString();
   const slippagePercentage = 0.03; // 3% slippage for better liquidity routing
 
