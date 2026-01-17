@@ -110,7 +110,7 @@ const INITIAL_TOKENS: Token[] = [
     icon: 'U',
     category: 'Stables',
     iconUrl: 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
-    address: '0x833589fCD6eDb6E08f4c7C32f4f71b54bdA02913',
+    address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     decimals: 6,
   },
   { 

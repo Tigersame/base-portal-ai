@@ -1,11 +1,10 @@
-import { createPublicClient, http, formatUnits, parseUnits, encodeFunctionData } from 'viem';
+import { createPublicClient, http, formatUnits, parseUnits, encodeFunctionData, decodeFunctionResult } from 'viem';
 import { base } from 'viem/chains';
 import { Token } from '../types';
 
 const QUOTER_V2 = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a';
 const SWAP_ROUTER_02 = '0x2626664c2603336E57B271c5C0b26F421741e481';
 const WETH = '0x4200000000000000000000000000000000000006';
-const NATIVE_ETH = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
 const FEE_TIERS = [500, 3000, 10000] as const;
 
@@ -82,7 +81,7 @@ const swapRouterAbi = [
 
 const getClient = () => {
   const alchemyKey = typeof window !== 'undefined' 
-    ? (window as any).__ALCHEMY_KEY__ || import.meta.env.VITE_ALCHEMY_API_KEY 
+    ? import.meta.env.VITE_ALCHEMY_API_KEY 
     : undefined;
   
   const rpcUrl = alchemyKey 
@@ -113,20 +112,19 @@ export type UniswapQuote = {
 
 async function tryQuoteWithFee(
   client: ReturnType<typeof getClient>,
-  tokenIn: string,
-  tokenOut: string,
+  tokenIn: `0x${string}`,
+  tokenOut: `0x${string}`,
   amountIn: bigint,
   fee: number
 ): Promise<{ amountOut: bigint; gasEstimate: bigint } | null> {
   try {
-    const result = await client.simulateContract({
-      address: QUOTER_V2,
+    const callData = encodeFunctionData({
       abi: quoterAbi,
       functionName: 'quoteExactInputSingle',
       args: [
         {
-          tokenIn: tokenIn as `0x${string}`,
-          tokenOut: tokenOut as `0x${string}`,
+          tokenIn,
+          tokenOut,
           fee,
           amountIn,
           sqrtPriceLimitX96: 0n,
@@ -134,10 +132,28 @@ async function tryQuoteWithFee(
       ],
     });
 
-    const [amountOut, , , gasEstimate] = result.result;
+    const result = await client.call({
+      to: QUOTER_V2,
+      data: callData,
+    });
+
+    if (!result.data) {
+      console.log(`[Uniswap] Fee tier ${fee}: No data returned`);
+      return null;
+    }
+
+    const decoded = decodeFunctionResult({
+      abi: quoterAbi,
+      functionName: 'quoteExactInputSingle',
+      data: result.data,
+    });
+
+    const [amountOut, , , gasEstimate] = decoded;
+    console.log(`[Uniswap] Fee tier ${fee}: amountOut=${amountOut.toString()}`);
     return { amountOut, gasEstimate };
   } catch (error) {
-    console.log(`[Uniswap] Fee tier ${fee} not available:`, (error as Error).message?.slice(0, 50));
+    const errMsg = (error as Error).message || '';
+    console.log(`[Uniswap] Fee tier ${fee} failed:`, errMsg.slice(0, 100));
     return null;
   }
 }
@@ -153,8 +169,8 @@ export async function getUniswapQuote(
 
   const client = getClient();
   
-  const tokenIn = from.isNative ? WETH : from.address!;
-  const tokenOut = to.isNative ? WETH : to.address!;
+  const tokenIn = (from.isNative ? WETH : from.address!) as `0x${string}`;
+  const tokenOut = (to.isNative ? WETH : to.address!) as `0x${string}`;
   
   if (tokenIn.toLowerCase() === tokenOut.toLowerCase()) {
     throw new Error('Cannot swap a token for itself');
@@ -166,21 +182,21 @@ export async function getUniswapQuote(
     tokenIn,
     tokenOut,
     amountIn: amountIn.toString(),
-    isNativeIn: from.isNative,
-    isNativeOut: to.isNative,
+    from: from.symbol,
+    to: to.symbol,
   });
 
   let bestQuote: { amountOut: bigint; gasEstimate: bigint; fee: number } | null = null;
 
   for (const fee of FEE_TIERS) {
     const result = await tryQuoteWithFee(client, tokenIn, tokenOut, amountIn, fee);
-    if (result && (!bestQuote || result.amountOut > bestQuote.amountOut)) {
+    if (result && result.amountOut > 0n && (!bestQuote || result.amountOut > bestQuote.amountOut)) {
       bestQuote = { ...result, fee };
     }
   }
 
   if (!bestQuote) {
-    throw new Error('No liquidity found on Uniswap V3. Try a different token pair.');
+    throw new Error('No liquidity found on Uniswap V3. Try a different token pair or larger amount.');
   }
 
   const outputAmount = formatUnits(bestQuote.amountOut, to.decimals ?? 18);
@@ -191,8 +207,8 @@ export async function getUniswapQuote(
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800);
 
   const swapParams = {
-    tokenIn: tokenIn as `0x${string}`,
-    tokenOut: tokenOut as `0x${string}`,
+    tokenIn,
+    tokenOut,
     fee: bestQuote.fee,
     recipient: recipient as `0x${string}`,
     amountIn,
@@ -202,7 +218,7 @@ export async function getUniswapQuote(
 
   let callData: `0x${string}`;
   
-  if (to.isNative) {
+  if (to.isNative && takerAddress) {
     const swapCallData = encodeFunctionData({
       abi: swapRouterAbi,
       functionName: 'exactInputSingle',
@@ -221,10 +237,11 @@ export async function getUniswapQuote(
       args: [deadline, [swapCallData, unwrapCallData]],
     });
   } else {
+    const finalRecipient = takerAddress || SWAP_ROUTER_02;
     const swapCallData = encodeFunctionData({
       abi: swapRouterAbi,
       functionName: 'exactInputSingle',
-      args: [{ ...swapParams, recipient: takerAddress as `0x${string}` }],
+      args: [{ ...swapParams, recipient: finalRecipient as `0x${string}` }],
     });
     
     callData = encodeFunctionData({
