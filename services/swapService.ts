@@ -91,7 +91,7 @@ export const getSwapQuote = async (
       try {
         const errorData = JSON.parse(errorText);
         if (errorData.message?.includes('no Route matched')) {
-          console.error('No liquidity route found. Try increasing the swap amount (minimum ~0.01 ETH or equivalent).');
+          console.error('No liquidity route found. Try increasing the swap amount (minimum ~0.001 ETH or $3 equivalent).');
         }
       } catch (e) {
         // Error text wasn't JSON, ignore

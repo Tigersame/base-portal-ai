@@ -211,7 +211,7 @@ const App: React.FC = () => {
 
   const [swapFrom, setSwapFrom] = useState(INITIAL_TOKENS[0]);
   const [swapTo, setSwapTo] = useState(INITIAL_TOKENS[2]);
-  const [swapAmount, setSwapAmount] = useState('1.0');
+  const [swapAmount, setSwapAmount] = useState('0.001');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [targetPrice, setTargetPrice] = useState('');
   const [orderExpiry, setOrderExpiry] = useState<OrderExpiry>('gtc');
@@ -611,8 +611,8 @@ const App: React.FC = () => {
                       value={swapAmount} 
                       onChange={(e) => setSwapAmount(e.target.value)} 
                       placeholder="0.0"
-                      min="0.01"
-                      step="0.01"
+                      min="0.001"
+                      step="0.001"
                       className="bg-transparent text-4xl sm:text-5xl outline-none font-black text-white w-full tabular-nums pr-12" 
                     />
                     <button 
@@ -624,9 +624,9 @@ const App: React.FC = () => {
                   </div>
                   <SearchableTokenSelector tokens={availableTokens} selectedToken={swapFrom} onSelect={(t) => setSwapFrom(t)} label="Sell" />
                 </div>
-                {parseFloat(swapAmount) > 0 && parseFloat(swapAmount) < 0.01 && (
+                {parseFloat(swapAmount) > 0 && parseFloat(swapAmount) < 0.001 && (
                   <div className="mt-2 text-[10px] font-bold text-yellow-500/80">
-                    ⚠️ Minimum recommended: 0.01 {swapFrom.symbol} for optimal liquidity
+                    ⚠️ Minimum: 0.001 {swapFrom.symbol} (~$3) for liquidity
                   </div>
                 )}
               </div>
