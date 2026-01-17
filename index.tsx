@@ -31,6 +31,9 @@ const rpcUrls = [
   'https://base.meowrpc.com',
 ].filter(Boolean) as string[];
 
+// Use the first available RPC or fallback to Base's public RPC
+const primaryRpc = rpcUrls.length > 0 ? rpcUrls[0] : 'https://mainnet.base.org';
+
 const wagmiConfig = createConfig({
   chains: [base],
   connectors: [
@@ -44,12 +47,14 @@ const wagmiConfig = createConfig({
     }),
   ],
   transports: {
-    [base.id]: http(rpcUrls[0], {
-      batch: true,
-      fetchOptions: {
-        timeout: 10000,
+    [base.id]: http(primaryRpc, {
+      batch: {
+        multicall: true,
       },
-      retryCount: 2,
+      fetchOptions: {
+        timeout: 15000,
+      },
+      retryCount: 3,
       retryDelay: 1000,
     }),
   },
