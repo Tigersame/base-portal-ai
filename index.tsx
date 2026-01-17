@@ -19,21 +19,36 @@ const queryClient = new QueryClient();
 const infuraId =
   (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_INFURA_ID') : null) ||
   (import.meta.env.VITE_INFURA_ID as string | undefined);
-const baseRpcUrl = infuraId
-  ? `https://base-mainnet.infura.io/v3/${infuraId}`
-  : 'https://mainnet.base.org';
+
+const ankrApiKey =
+  (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_ANKR_API_KEY') : null) ||
+  (import.meta.env.VITE_ANKR_API_KEY as string | undefined);
+
+const rpcUrls = [
+  infuraId ? `https://base-mainnet.infura.io/v3/${infuraId}` : null,
+  ankrApiKey ? `https://rpc.ankr.com/base/${ankrApiKey}` : 'https://rpc.ankr.com/base',
+  'https://mainnet.base.org',
+  'https://base.meowrpc.com',
+].filter(Boolean) as string[];
 
 const wagmiConfig = createConfig({
   chains: [base],
   connectors: [
     coinbaseWallet({
       appName: 'BEND',
-      preference: 'smartWalletOnly', // Prioritize Smart Wallet/Base Account for seamless onboarding
+      preference: 'smartWalletOnly',
       version: '4',
     }),
   ],
   transports: {
-    [base.id]: http(baseRpcUrl),
+    [base.id]: http(rpcUrls[0], {
+      batch: true,
+      fetchOptions: {
+        timeout: 10000,
+      },
+      retryCount: 2,
+      retryDelay: 1000,
+    }),
   },
 });
 

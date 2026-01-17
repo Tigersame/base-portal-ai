@@ -151,7 +151,7 @@ const App: React.FC = () => {
   const [showFarcasterMenu, setShowFarcasterMenu] = useState(false);
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
   const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
-  const [apiKeys, setApiKeys] = useState({ infuraId: '', zeroXKey: '', geminiKey: '' });
+  const [apiKeys, setApiKeys] = useState({ infuraId: '', zeroXKey: '', geminiKey: '', ankrKey: '' });
   const [apiStatus, setApiStatus] = useState<string | null>(null);
   
   const [localNotificationsActive, setLocalNotificationsActive] = useState(() => {
@@ -266,6 +266,7 @@ const App: React.FC = () => {
       infuraId: localStorage.getItem('VITE_INFURA_ID') || '',
       zeroXKey: localStorage.getItem('VITE_0X_API_KEY') || '',
       geminiKey: localStorage.getItem('GEMINI_API_KEY') || '',
+      ankrKey: localStorage.getItem('VITE_ANKR_API_KEY') || '',
     });
     setApiStatus(null);
   }, [showSettings]);
@@ -436,6 +437,7 @@ const App: React.FC = () => {
     localStorage.setItem('VITE_INFURA_ID', apiKeys.infuraId.trim());
     localStorage.setItem('VITE_0X_API_KEY', apiKeys.zeroXKey.trim());
     localStorage.setItem('GEMINI_API_KEY', apiKeys.geminiKey.trim());
+    localStorage.setItem('VITE_ANKR_API_KEY', apiKeys.ankrKey.trim());
     setApiStatus('Saved. Reloading to apply network changes...');
     setTimeout(() => window.location.reload(), 500);
   };
@@ -1213,6 +1215,16 @@ const App: React.FC = () => {
                         value={apiKeys.geminiKey}
                         onChange={(e) => setApiKeys(prev => ({ ...prev, geminiKey: e.target.value }))}
                         placeholder="GEMINI_API_KEY"
+                        className="w-full bg-black/40 border border-[#222] rounded-2xl p-3 text-xs font-bold outline-none focus:border-blue-500 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1">Ankr API Key (Optional)</label>
+                      <input
+                        type="password"
+                        value={apiKeys.ankrKey}
+                        onChange={(e) => setApiKeys(prev => ({ ...prev, ankrKey: e.target.value }))}
+                        placeholder="VITE_ANKR_API_KEY (for RPC fallback)"
                         className="w-full bg-black/40 border border-[#222] rounded-2xl p-3 text-xs font-bold outline-none focus:border-blue-500 text-white"
                       />
                     </div>
