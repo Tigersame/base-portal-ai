@@ -32,7 +32,16 @@ type ZeroXQuoteResponseV2 = {
   issues?: {
     allowance?: {
       spender: string;
+      actual: string;
+      expected: string;
     };
+    balance?: {
+      token: string;
+      actual: string;
+      expected: string;
+    };
+    invalidSourcesPassed?: string[];
+    simulationIncomplete?: boolean;
   };
   route?: {
     fills: Array<{
@@ -162,7 +171,25 @@ function formatQuoteResponse(
   // Check for liquidity issue first
   if (data?.liquidityAvailable === false) {
     console.warn('0x API: No liquidity route found', data);
-    throw new Error('No liquidity route found. Try increasing the swap amount or use different tokens (ETH, USDC, WETH).');
+    
+    // Build specific error message based on issues
+    const issues = data.issues || {};
+    let errorMsg = 'No liquidity available. ';
+    
+    if (issues.balance) {
+      errorMsg += `Insufficient balance: need ${issues.balance.expected} but have ${issues.balance.actual}. `;
+    }
+    if (issues.allowance) {
+      errorMsg += `Token approval required for ${issues.allowance.spender}. `;
+    }
+    if (issues.simulationIncomplete) {
+      errorMsg += 'Cannot verify trade simulation. ';
+    }
+    if (Object.keys(issues).length === 0) {
+      errorMsg += 'Try increasing swap amount (min ~0.005 ETH) or use major tokens (ETH, USDC, WETH).';
+    }
+    
+    throw new Error(errorMsg.trim());
   }
   
   if (!data || !data.buyAmount || !data.sellAmount || !data.transaction) {

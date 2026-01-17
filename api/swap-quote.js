@@ -50,11 +50,19 @@ module.exports = async function handler(req, res) {
     if (!response.ok) {
       console.error('0x API error:', response.status, body);
     } else {
-      // Parse and check for liquidityAvailable
+      // Parse and check for liquidityAvailable and issues
       try {
         const parsed = JSON.parse(body);
         if (parsed.liquidityAvailable === false) {
-          console.warn('0x API returned liquidityAvailable: false', parsed);
+          console.warn('⚠️ 0x API: No liquidity available');
+          console.warn('Issues object:', JSON.stringify(parsed.issues || {}, null, 2));
+          console.warn('Request was:', {
+            sellToken,
+            buyToken, 
+            sellAmount,
+            taker,
+            slippagePercentage
+          });
         }
       } catch (e) {
         console.error('Failed to parse 0x response:', e);
