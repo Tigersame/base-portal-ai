@@ -14,8 +14,23 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Ensure Buffer is available for browser bundles that depend on it.
 (globalThis as any).Buffer = (globalThis as any).Buffer || Buffer;
 
-// Detect if running inside Farcaster Mini App (iframe)
-const isFarcasterMiniApp = typeof window !== 'undefined' && window.parent !== window;
+// Improved Farcaster Mini App detection
+function detectFarcasterMiniApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  
+  // Check if in iframe
+  const isIframe = window.self !== window.top;
+  
+  // Check user agent for Warpcast
+  const isWarpcast = navigator.userAgent.toLowerCase().includes('warpcast');
+  
+  // Check for Farcaster-specific properties
+  const hasFarcasterContext = !!(window as any).farcaster || !!(window as any).fc;
+  
+  return isIframe || isWarpcast || hasFarcasterContext;
+}
+
+const isFarcasterMiniApp = detectFarcasterMiniApp();
 
 const queryClient = new QueryClient();
 
