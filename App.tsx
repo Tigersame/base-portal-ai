@@ -62,6 +62,7 @@ import { erc20Abi, formatUnits, parseUnits, maxUint256 } from 'viem';
 
 import { Tab, Token, MorphoVault, TokenCategory, TokenTemplate, AIInsight, TokenLaunchConfig, OrderType, LimitOrder, OrderExpiry } from './types';
 import { Card, Button, Modal, SearchableTokenSelector } from './components/UI';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { getMarketInsights, generateTokenDescription } from './services/geminiService';
 import { getSwapQuote } from './services/swapService';
 
@@ -604,9 +605,15 @@ const App: React.FC = () => {
                 <WalletIcon size={14} /> Connect
               </ConnectWallet>
               <WalletDropdown>
-                <Identity className="px-4 pt-3 pb-2" hasCopyAddressOnClick>
-                  <Avatar /><Name /><Address /><EthBalance />
-                </Identity>
+                <ErrorBoundary fallback={
+                  <div className="px-4 pt-3 pb-2 text-gray-400 text-sm">
+                    <Address />
+                  </div>
+                }>
+                  <Identity className="px-4 pt-3 pb-2" hasCopyAddressOnClick>
+                    <Avatar /><Name /><Address /><EthBalance />
+                  </Identity>
+                </ErrorBoundary>
                 <WalletDropdownBasename />
                 <WalletDropdownLink icon="wallet" href="https://wallet.coinbase.com">Dashboard</WalletDropdownLink>
                 <WalletDropdownDisconnect />
