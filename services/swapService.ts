@@ -88,6 +88,15 @@ export const getSwapQuote = async (
       const errorText = await response.text();
       console.error('0x quote failed via proxy:', response.status, errorText);
       
+      try {
+        const errorData = JSON.parse(errorText);
+        if (errorData.message?.includes('no Route matched')) {
+          console.error('No liquidity route found. Try increasing the swap amount (minimum ~0.01 ETH or equivalent).');
+        }
+      } catch (e) {
+        // Error text wasn't JSON, ignore
+      }
+      
       console.log('Trying direct API call...');
       const directResponse = await fetch(`${ZERO_X_DIRECT_URL}?${params.toString()}`, {
         headers: {

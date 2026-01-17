@@ -610,7 +610,9 @@ const App: React.FC = () => {
                       type="number" 
                       value={swapAmount} 
                       onChange={(e) => setSwapAmount(e.target.value)} 
-                      placeholder="0.0" 
+                      placeholder="0.0"
+                      min="0.01"
+                      step="0.01"
                       className="bg-transparent text-4xl sm:text-5xl outline-none font-black text-white w-full tabular-nums pr-12" 
                     />
                     <button 
@@ -622,6 +624,11 @@ const App: React.FC = () => {
                   </div>
                   <SearchableTokenSelector tokens={availableTokens} selectedToken={swapFrom} onSelect={(t) => setSwapFrom(t)} label="Sell" />
                 </div>
+                {parseFloat(swapAmount) > 0 && parseFloat(swapAmount) < 0.01 && (
+                  <div className="mt-2 text-[10px] font-bold text-yellow-500/80">
+                    ⚠️ Minimum recommended: 0.01 {swapFrom.symbol} for optimal liquidity
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-center -my-6 relative z-10">
