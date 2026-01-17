@@ -1,7 +1,7 @@
 import { formatUnits, parseUnits } from 'viem';
 import { Token } from '../types';
 
-const ZERO_X_PROXY_URL = '/api/0x/swap/v1/quote';
+const ZERO_X_PROXY_URL = '/api/swap-quote';
 const ZERO_X_DIRECT_URL = 'https://base.api.0x.org/swap/v1/quote';
 const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
