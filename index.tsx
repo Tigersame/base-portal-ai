@@ -24,9 +24,14 @@ const ankrApiKey =
   (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_ANKR_API_KEY') : null) ||
   (import.meta.env.VITE_ANKR_API_KEY as string | undefined);
 
+// Handle ankrApiKey - it might be just the key or the full URL
+const ankrRpc = ankrApiKey 
+  ? (ankrApiKey.startsWith('http') ? ankrApiKey : `https://rpc.ankr.com/base/${ankrApiKey}`)
+  : 'https://rpc.ankr.com/base';
+
 const rpcUrls = [
   infuraId ? `https://base-mainnet.infura.io/v3/${infuraId}` : null,
-  ankrApiKey ? `https://rpc.ankr.com/base/${ankrApiKey}` : 'https://rpc.ankr.com/base',
+  ankrRpc,
   'https://mainnet.base.org',
   'https://base.meowrpc.com',
 ].filter(Boolean) as string[];
