@@ -2,11 +2,27 @@ import { createPublicClient, http, formatUnits, parseUnits, encodeFunctionData, 
 import { base } from 'viem/chains';
 import { Token } from '../types';
 
+const FACTORY = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
 const QUOTER_V2 = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a';
 const SWAP_ROUTER_02 = '0x2626664c2603336E57B271c5C0b26F421741e481';
 const WETH = '0x4200000000000000000000000000000000000006';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const FEE_TIERS = [500, 3000, 10000] as const;
+
+const factoryAbi = [
+  {
+    name: 'getPool',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+    ],
+    outputs: [{ name: 'pool', type: 'address' }],
+  },
+] as const;
 
 const quoterAbi = [
   {
@@ -118,6 +134,20 @@ async function tryQuoteWithFee(
   fee: number
 ): Promise<{ amountOut: bigint; gasEstimate: bigint } | null> {
   try {
+    const pool = await client.readContract({
+      address: FACTORY,
+      abi: factoryAbi,
+      functionName: 'getPool',
+      args: [tokenIn, tokenOut, fee],
+    });
+
+    if (!pool || pool === ZERO_ADDRESS) {
+      console.log(`[Uniswap] Fee tier ${fee}: No pool exists`);
+      return null;
+    }
+
+    console.log(`[Uniswap] Fee tier ${fee}: Pool found at ${pool}`);
+
     const callData = encodeFunctionData({
       abi: quoterAbi,
       functionName: 'quoteExactInputSingle',
@@ -138,7 +168,7 @@ async function tryQuoteWithFee(
     });
 
     if (!result.data) {
-      console.log(`[Uniswap] Fee tier ${fee}: No data returned`);
+      console.log(`[Uniswap] Fee tier ${fee}: No quote data returned`);
       return null;
     }
 
