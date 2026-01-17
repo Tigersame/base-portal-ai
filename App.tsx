@@ -56,7 +56,7 @@ import {
   WalletDropdownBasename
 } from '@coinbase/onchainkit/wallet';
 import { Address, Avatar, Name, Identity, EthBalance } from '@coinbase/onchainkit/identity';
-import { useAccount, useBalance, useReadContracts, useWalletClient, useWriteContract } from 'wagmi';
+import { useAccount, useBalance, useReadContracts, useWalletClient, useWriteContract, useConnect } from 'wagmi';
 import { base } from 'viem/chains';
 import { erc20Abi, formatUnits, parseUnits, maxUint256 } from 'viem';
 
@@ -144,6 +144,7 @@ const PortalLogo = () => (
 
 const App: React.FC = () => {
   const { address: onchainAddress, isConnected } = useAccount();
+  const { connect, connectors } = useConnect();
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SWAP);
   const [farcasterUser, setFarcasterUser] = useState<any>(null);
   const [basename, setBasename] = useState<string | null>(null);
@@ -251,6 +252,25 @@ const App: React.FC = () => {
           setFarcasterUser(context.user);
           if (context.user.username) setBasename(`${context.user.username}.base`);
           if (context.client?.notificationDetails) setIsNotificationEnabled(true);
+          
+          // Auto-connect wallet if not already connected
+          if (!isConnected && connectors.length > 0) {
+            console.log('Farcaster user detected, auto-connecting wallet...');
+            try {
+              // Try Coinbase Wallet first (smart wallet)
+              const coinbaseConnector = connectors.find(c => c.name.toLowerCase().includes('coinbase'));
+              if (coinbaseConnector) {
+                await connect({ connector: coinbaseConnector });
+                console.log('Coinbase Wallet auto-connected successfully');
+              } else {
+                // Fallback to any available connector
+                await connect({ connector: connectors[0] });
+                console.log('Wallet auto-connected successfully');
+              }
+            } catch (connectError) {
+              console.warn('Auto-connect failed, user can connect manually:', connectError);
+            }
+          }
         }
       } catch (err) {
         console.warn("SDK initialization skipped", err);
@@ -325,6 +345,25 @@ const App: React.FC = () => {
       if (context?.user) {
         setFarcasterUser(context.user);
         if (context.user.username) setBasename(`${context.user.username}.base`);
+        
+        // Auto-connect wallet after sign-in
+        if (!isConnected && connectors.length > 0) {
+          console.log('User signed in, connecting wallet...');
+          try {
+            // Try Coinbase Wallet first (smart wallet)
+            const coinbaseConnector = connectors.find(c => c.name.toLowerCase().includes('coinbase'));
+            if (coinbaseConnector) {
+              await connect({ connector: coinbaseConnector });
+              console.log('Coinbase Wallet connected successfully');
+            } else {
+              // Fallback to any available connector
+              await connect({ connector: connectors[0] });
+              console.log('Wallet connected successfully');
+            }
+          } catch (connectError) {
+            console.warn('Wallet connection failed:', connectError);
+          }
+        }
       }
     } catch (err) {
       console.error("Sign-In failed:", err);

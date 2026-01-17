@@ -7,7 +7,7 @@ import App from './App';
 import { Providers } from './providers';
 import { http, createConfig, WagmiProvider } from 'wagmi';
 import { base } from 'viem/chains';
-import { coinbaseWallet } from 'wagmi/connectors';
+import { coinbaseWallet, injected } from 'wagmi/connectors';
 import { OnchainKitProvider } from '@coinbase/onchainkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -38,6 +38,9 @@ const wagmiConfig = createConfig({
       appName: 'BEND',
       preference: 'smartWalletOnly',
       version: '4',
+    }),
+    injected({
+      shimDisconnect: true,
     }),
   ],
   transports: {
