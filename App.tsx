@@ -56,9 +56,9 @@ import {
   WalletDropdownBasename
 } from '@coinbase/onchainkit/wallet';
 import { Address, Avatar, Name, Identity, EthBalance } from '@coinbase/onchainkit/identity';
-import { useAccount, useBalance, useReadContracts, useWalletClient } from 'wagmi';
+import { useAccount, useBalance, useReadContracts, useWalletClient, useWriteContract } from 'wagmi';
 import { base } from 'viem/chains';
-import { erc20Abi, formatUnits } from 'viem';
+import { erc20Abi, formatUnits, parseUnits, maxUint256 } from 'viem';
 
 import { Tab, Token, MorphoVault, TokenCategory, TokenTemplate, AIInsight, TokenLaunchConfig, OrderType, LimitOrder, OrderExpiry } from './types';
 import { Card, Button, Modal, SearchableTokenSelector } from './components/UI';
@@ -186,6 +186,7 @@ const App: React.FC = () => {
   });
 
   const { data: walletClient } = useWalletClient();
+  const { writeContractAsync } = useWriteContract();
 
   const availableTokens = useMemo(() => {
     return INITIAL_TOKENS.map((token, index) => {
@@ -335,22 +336,52 @@ const App: React.FC = () => {
     if (orderType === 'limit') {
       return;
     }
-    if (!walletClient || !swapQuote) return;
+    if (!walletClient || !swapQuote) {
+      alert('Wallet not connected or quote unavailable');
+      return;
+    }
+    if (!onchainAddress) {
+      alert('Wallet address not found');
+      return;
+    }
 
     setIsSwapping(true);
     try {
+      if (!swapFrom.isNative && swapFrom.address && writeContractAsync) {
+        try {
+          const sellAmount = parseUnits(swapAmount, swapFrom.decimals ?? 18);
+          
+          await writeContractAsync({
+            address: swapFrom.address as `0x${string}`,
+            abi: erc20Abi,
+            functionName: 'approve',
+            args: [swapQuote.to as `0x${string}`, sellAmount],
+            chainId: base.id,
+          });
+        } catch (approvalError: any) {
+          console.error("Approval failed", approvalError);
+          const errorMessage = approvalError?.message || approvalError?.shortMessage || 'Token approval failed';
+          alert(`Approval failed: ${errorMessage}`);
+          setIsSwapping(false);
+          return;
+        }
+      }
+
       const hash = await walletClient.sendTransaction({
         account: walletClient.account,
-        to: swapQuote.to,
-        data: swapQuote.data,
+        to: swapQuote.to as `0x${string}`,
+        data: swapQuote.data as `0x${string}`,
         value: swapQuote.value ? BigInt(swapQuote.value) : undefined,
         gas: swapQuote.gas ? BigInt(swapQuote.gas) : undefined,
-      } as any);
+        chain: base,
+      });
       setShowSwapConfirm(false);
       setSwapAmount('');
       sdk.actions.openUrl(`https://basescan.org/tx/${hash}`);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Swap failed", e);
+      const errorMessage = e?.message || e?.shortMessage || 'Transaction failed';
+      alert(`Swap failed: ${errorMessage}`);
     } finally {
       setIsSwapping(false);
     }

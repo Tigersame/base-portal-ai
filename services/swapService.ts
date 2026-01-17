@@ -76,7 +76,8 @@ export const getSwapQuote = async (
   });
 
   if (!response.ok) {
-    console.error('0x quote failed', await response.text());
+    const errorText = await response.text();
+    console.error('0x quote failed:', response.status, errorText);
     return null;
   }
 
