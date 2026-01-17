@@ -7,10 +7,14 @@ const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const BASE_CHAIN_ID = '8453';
 
 const getZeroXApiKey = () => {
+  // For proxied requests, the API key is handled by the backend
+  // Only check localStorage for direct API access (not recommended)
   if (typeof localStorage !== 'undefined') {
-    return localStorage.getItem('VITE_0X_API_KEY') || localStorage.getItem('zeroXKey');
+    const localKey = localStorage.getItem('VITE_0X_API_KEY') || localStorage.getItem('zeroXKey');
+    if (localKey) return localKey;
   }
-  return (import.meta as any).env?.VITE_0X_API_KEY as string | undefined;
+  // Return a placeholder - the backend proxy will use the real key
+  return 'PROXY';
 };
 
 // 0x API v2 response structure
@@ -70,10 +74,7 @@ export const getSwapQuote = async (
   takerAddress?: string | null
 ): Promise<SwapQuote | null> => {
   const apiKey = getZeroXApiKey();
-  if (!apiKey) {
-    console.error('No 0x API key found');
-    return null;
-  }
+  // API key check removed - backend proxy handles authentication
   if (!amount || Number(amount) <= 0) return null;
   if (!from.isNative && !from.address) return null;
   if (!to.isNative && !to.address) return null;
