@@ -1,13 +1,16 @@
-import { createPublicClient, http, formatUnits, parseUnits, encodeFunctionData, decodeFunctionResult } from 'viem';
+import { createPublicClient, http, formatUnits, parseUnits, encodeFunctionData } from 'viem';
 import { base } from 'viem/chains';
 import { Token } from '../types';
 
-const FACTORY = '0x33128a8fC17869897dcE68Ed026d694621f6FDfD';
-const QUOTER_V2 = '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a';
-const SWAP_ROUTER_02 = '0x2626664c2603336E57B271c5C0b26F421741e481';
+const UNI_V3_BASE = {
+  chainId: 8453,
+  factory: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD',
+  quoterV2: '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',
+  router02: '0x2626664c2603336E57B271c5C0b26F421741e481',
+} as const;
+
 const WETH = '0x4200000000000000000000000000000000000006';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-
 const FEE_TIERS = [500, 3000, 10000] as const;
 
 const factoryAbi = [
@@ -36,8 +39,8 @@ const quoterAbi = [
         components: [
           { name: 'tokenIn', type: 'address' },
           { name: 'tokenOut', type: 'address' },
-          { name: 'fee', type: 'uint24' },
           { name: 'amountIn', type: 'uint256' },
+          { name: 'fee', type: 'uint24' },
           { name: 'sqrtPriceLimitX96', type: 'uint160' },
         ],
       },
@@ -126,66 +129,57 @@ export type UniswapQuote = {
   amountOutMinimum: bigint;
 };
 
-async function tryQuoteWithFee(
+async function findPool(
+  client: ReturnType<typeof getClient>,
+  tokenA: `0x${string}`,
+  tokenB: `0x${string}`
+): Promise<{ pool: `0x${string}`; fee: number } | null> {
+  for (const fee of FEE_TIERS) {
+    try {
+      const pool = await client.readContract({
+        address: UNI_V3_BASE.factory,
+        abi: factoryAbi,
+        functionName: 'getPool',
+        args: [tokenA, tokenB, fee],
+      });
+
+      if (pool && pool !== ZERO_ADDRESS) {
+        console.log(`[Uniswap] Pool found: ${pool} (fee: ${fee})`);
+        return { pool, fee };
+      }
+    } catch (e) {
+      console.log(`[Uniswap] getPool failed for fee ${fee}`);
+    }
+  }
+  return null;
+}
+
+async function quoteExactIn(
   client: ReturnType<typeof getClient>,
   tokenIn: `0x${string}`,
   tokenOut: `0x${string}`,
   amountIn: bigint,
   fee: number
-): Promise<{ amountOut: bigint; gasEstimate: bigint } | null> {
-  try {
-    const pool = await client.readContract({
-      address: FACTORY,
-      abi: factoryAbi,
-      functionName: 'getPool',
-      args: [tokenIn, tokenOut, fee],
-    });
+): Promise<{ amountOut: bigint; gasEstimate: bigint }> {
+  const result = await client.readContract({
+    address: UNI_V3_BASE.quoterV2,
+    abi: quoterAbi,
+    functionName: 'quoteExactInputSingle',
+    args: [
+      {
+        tokenIn,
+        tokenOut,
+        amountIn,
+        fee,
+        sqrtPriceLimitX96: 0n,
+      },
+    ],
+  });
 
-    if (!pool || pool === ZERO_ADDRESS) {
-      console.log(`[Uniswap] Fee tier ${fee}: No pool exists`);
-      return null;
-    }
-
-    console.log(`[Uniswap] Fee tier ${fee}: Pool found at ${pool}`);
-
-    const callData = encodeFunctionData({
-      abi: quoterAbi,
-      functionName: 'quoteExactInputSingle',
-      args: [
-        {
-          tokenIn,
-          tokenOut,
-          fee,
-          amountIn,
-          sqrtPriceLimitX96: 0n,
-        },
-      ],
-    });
-
-    const result = await client.call({
-      to: QUOTER_V2,
-      data: callData,
-    });
-
-    if (!result.data) {
-      console.log(`[Uniswap] Fee tier ${fee}: No quote data returned`);
-      return null;
-    }
-
-    const decoded = decodeFunctionResult({
-      abi: quoterAbi,
-      functionName: 'quoteExactInputSingle',
-      data: result.data,
-    });
-
-    const [amountOut, , , gasEstimate] = decoded;
-    console.log(`[Uniswap] Fee tier ${fee}: amountOut=${amountOut.toString()}`);
-    return { amountOut, gasEstimate };
-  } catch (error) {
-    const errMsg = (error as Error).message || '';
-    console.log(`[Uniswap] Fee tier ${fee} failed:`, errMsg.slice(0, 100));
-    return null;
-  }
+  return {
+    amountOut: result[0],
+    gasEstimate: result[3],
+  };
 }
 
 export async function getUniswapQuote(
@@ -208,38 +202,30 @@ export async function getUniswapQuote(
 
   const amountIn = parseUnits(amount, from.decimals ?? 18);
 
-  console.log('[Uniswap] Quoting:', {
-    tokenIn,
-    tokenOut,
-    amountIn: amountIn.toString(),
-    from: from.symbol,
-    to: to.symbol,
-  });
+  console.log('[Uniswap] Quoting:', { tokenIn, tokenOut, amountIn: amountIn.toString() });
 
-  let bestQuote: { amountOut: bigint; gasEstimate: bigint; fee: number } | null = null;
-
-  for (const fee of FEE_TIERS) {
-    const result = await tryQuoteWithFee(client, tokenIn, tokenOut, amountIn, fee);
-    if (result && result.amountOut > 0n && (!bestQuote || result.amountOut > bestQuote.amountOut)) {
-      bestQuote = { ...result, fee };
-    }
+  const poolData = await findPool(client, tokenIn, tokenOut);
+  
+  if (!poolData) {
+    throw new Error('No Uniswap V3 pool found. Try a different token pair.');
   }
 
-  if (!bestQuote) {
-    throw new Error('No liquidity found on Uniswap V3. Try a different token pair or larger amount.');
-  }
+  const { fee } = poolData;
+  const quote = await quoteExactIn(client, tokenIn, tokenOut, amountIn, fee);
 
-  const outputAmount = formatUnits(bestQuote.amountOut, to.decimals ?? 18);
+  console.log(`[Uniswap] Quote: amountOut=${quote.amountOut.toString()}`);
+
+  const outputAmount = formatUnits(quote.amountOut, to.decimals ?? 18);
   const slippageBps = BigInt(Math.round(slippagePercent * 100));
-  const amountOutMinimum = (bestQuote.amountOut * (10000n - slippageBps)) / 10000n;
+  const amountOutMinimum = (quote.amountOut * (10000n - slippageBps)) / 10000n;
 
-  const recipient = to.isNative ? SWAP_ROUTER_02 : (takerAddress || SWAP_ROUTER_02);
+  const recipient = to.isNative ? UNI_V3_BASE.router02 : (takerAddress || UNI_V3_BASE.router02);
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800);
 
   const swapParams = {
     tokenIn,
     tokenOut,
-    fee: bestQuote.fee,
+    fee,
     recipient: recipient as `0x${string}`,
     amountIn,
     amountOutMinimum,
@@ -267,7 +253,7 @@ export async function getUniswapQuote(
       args: [deadline, [swapCallData, unwrapCallData]],
     });
   } else {
-    const finalRecipient = takerAddress || SWAP_ROUTER_02;
+    const finalRecipient = takerAddress || UNI_V3_BASE.router02;
     const swapCallData = encodeFunctionData({
       abi: swapRouterAbi,
       functionName: 'exactInputSingle',
@@ -281,23 +267,24 @@ export async function getUniswapQuote(
     });
   }
 
-  const feeLabel = bestQuote.fee === 500 ? '0.05%' : bestQuote.fee === 3000 ? '0.3%' : '1%';
+  const feeLabel = fee === 500 ? '0.05%' : fee === 3000 ? '0.3%' : '1%';
 
   return {
     outputAmount,
-    outputAmountRaw: bestQuote.amountOut,
+    outputAmountRaw: quote.amountOut,
     priceImpact: '< 0.5%',
     route: `Uniswap V3 (${feeLabel})`,
     fee: feeLabel,
-    feeTier: bestQuote.fee,
+    feeTier: fee,
     slippage: `${slippagePercent}%`,
     networkFeeUsd: '~$0.01',
-    to: SWAP_ROUTER_02,
+    to: UNI_V3_BASE.router02,
     data: callData,
     value: from.isNative ? amountIn.toString() : '0',
-    gas: (bestQuote.gasEstimate + 50000n).toString(),
+    gas: (quote.gasEstimate + 50000n).toString(),
     amountOutMinimum,
   };
 }
 
-export { SWAP_ROUTER_02, WETH, swapRouterAbi };
+export const SWAP_ROUTER_02 = UNI_V3_BASE.router02;
+export { WETH, swapRouterAbi };
