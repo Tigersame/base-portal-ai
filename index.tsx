@@ -14,50 +14,47 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // Ensure Buffer is available for browser bundles that depend on it.
 (globalThis as any).Buffer = (globalThis as any).Buffer || Buffer;
 
+// Detect if running inside Farcaster Mini App (iframe)
+const isFarcasterMiniApp = typeof window !== 'undefined' && window.parent !== window;
+
 const queryClient = new QueryClient();
 
-const infuraId =
-  (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_INFURA_ID') : null) ||
-  (import.meta.env.VITE_INFURA_ID as string | undefined);
-
-const ankrApiKey =
-  (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_ANKR_API_KEY') : null) ||
-  (import.meta.env.VITE_ANKR_API_KEY as string | undefined);
-
-// Validate infuraId - must be a hex string, not a URL
-const isValidInfuraId = infuraId && !infuraId.startsWith('http') && /^[a-f0-9]{32}$/i.test(infuraId);
-
-// Handle ankrApiKey - it might be just the key or the full URL
-const ankrRpc = ankrApiKey 
-  ? (ankrApiKey.startsWith('http') ? ankrApiKey : `https://rpc.ankr.com/base/${ankrApiKey}`)
-  : null;
-
+// Prioritize reliable public RPCs - Base public RPC first
+// Skip Infura if it causes issues (401/disabled)
 const rpcUrls = [
-  isValidInfuraId ? `https://base-mainnet.infura.io/v3/${infuraId}` : null,
-  ankrRpc,
-  'https://rpc.ankr.com/base',
   'https://mainnet.base.org',
   'https://base.meowrpc.com',
-].filter(Boolean) as string[];
+  'https://rpc.ankr.com/base',
+];
 
-// Use the first available RPC or fallback to Base's public RPC
-const primaryRpc = rpcUrls.length > 0 ? rpcUrls[0] : 'https://mainnet.base.org';
+const primaryRpc = rpcUrls[0];
 
 console.log('[RPC Config] Using RPC:', primaryRpc);
-console.log('[RPC Config] Available RPCs:', rpcUrls);
+console.log('[RPC Config] Is Farcaster Mini App:', isFarcasterMiniApp);
+
+// Configure connectors - only use Coinbase Smart Wallet in Mini App
+const connectors = isFarcasterMiniApp
+  ? [
+      coinbaseWallet({
+        appName: 'BEND',
+        preference: 'smartWalletOnly',
+        version: '4',
+      }),
+    ]
+  : [
+      coinbaseWallet({
+        appName: 'BEND',
+        preference: 'smartWalletOnly',
+        version: '4',
+      }),
+      injected({
+        shimDisconnect: true,
+      }),
+    ];
 
 const wagmiConfig = createConfig({
   chains: [base],
-  connectors: [
-    coinbaseWallet({
-      appName: 'BEND',
-      preference: 'smartWalletOnly',
-      version: '4',
-    }),
-    injected({
-      shimDisconnect: true,
-    }),
-  ],
+  connectors,
   transports: {
     [base.id]: http(primaryRpc, {
       batch: {
