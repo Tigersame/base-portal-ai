@@ -146,6 +146,12 @@ function formatQuoteResponse(
   to: Token,
   slippagePercentage: number
 ): SwapQuote {
+  // Validate required fields
+  if (!data || !data.buyAmount || !data.sellAmount || !data.transaction) {
+    console.error('Invalid quote response:', data);
+    throw new Error('Invalid quote response from 0x API');
+  }
+
   const buyAmountFormatted = formatUnits(BigInt(data.buyAmount), to.decimals ?? 18);
   const sellAmountBigInt = BigInt(data.sellAmount);
   const buyAmountBigInt = BigInt(data.buyAmount);
