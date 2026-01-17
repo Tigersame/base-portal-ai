@@ -133,15 +133,21 @@ export const getSwapQuote = async (
     });
 
     if (response.ok) {
-      const data = (await response.json()) as ZeroXQuoteResponseV2;
+      const data = (await response.json()) as ZeroXQuoteResponseV2 & { _debug?: any };
+      
+      // Log debug info if present
+      if (data._debug) {
+        console.log('[0x Debug Info]', data._debug);
+      }
       
       // If quote has liquidity, return it
       if (data.liquidityAvailable !== false) {
         return formatQuoteResponse(data, to, slippagePercentage, false);
       }
       
-      // Quote returned but no liquidity - try price endpoint for estimate
-      console.warn('Quote returned liquidityAvailable: false, trying price endpoint...');
+      // Quote returned but no liquidity - log full response and try price endpoint
+      console.warn('Quote returned liquidityAvailable: false', data);
+      console.warn('Issues:', data.issues);
     } else {
       const errorText = await response.text();
       console.error('0x quote failed:', response.status, errorText);

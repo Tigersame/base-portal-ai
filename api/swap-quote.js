@@ -15,6 +15,9 @@ module.exports = async function handler(req, res) {
     return;
   }
 
+  // Log API key status (not the key itself)
+  console.log('0x API Key status:', apiKey ? `Set (${apiKey.length} chars)` : 'Missing');
+
   try {
     const { sellToken, buyToken, sellAmount, slippagePercentage, taker } = req.query;
     
@@ -37,9 +40,10 @@ module.exports = async function handler(req, res) {
     }
     if (taker) targetUrl.searchParams.set('taker', taker);
 
-    console.log('Proxying to 0x API v2:', targetUrl.toString());
+    const fullUrl = targetUrl.toString();
+    console.log('Proxying to 0x API v2:', fullUrl);
 
-    const response = await fetch(targetUrl.toString(), {
+    const response = await fetch(fullUrl, {
       method: 'GET',
       headers: {
         '0x-api-key': apiKey,
@@ -52,32 +56,48 @@ module.exports = async function handler(req, res) {
     console.log('0x API Response Status:', response.status);
     console.log('0x API Response Body:', body);
     
-    if (!response.ok) {
-      console.error('0x API error:', response.status, body);
-    } else {
-      // Parse and check for liquidityAvailable and issues
-      try {
-        const parsed = JSON.parse(body);
-        if (parsed.liquidityAvailable === false) {
-          console.warn('⚠️ 0x API: No liquidity available');
-          console.warn('Issues object:', JSON.stringify(parsed.issues || {}, null, 2));
-          console.warn('Request was:', {
-            sellToken,
-            buyToken, 
-            sellAmount,
-            taker,
-            slippagePercentage
-          });
-        }
-      } catch (e) {
-        console.error('Failed to parse 0x response:', e);
+    // Try to parse and add debug info
+    let parsedBody;
+    try {
+      parsedBody = JSON.parse(body);
+      
+      // Add debug info to response for troubleshooting
+      if (parsedBody.liquidityAvailable === false) {
+        console.warn('⚠️ 0x API: No liquidity available');
+        console.warn('Issues object:', JSON.stringify(parsedBody.issues || {}, null, 2));
+        console.warn('Full request URL:', fullUrl);
+        console.warn('Request params:', {
+          chainId: '8453',
+          sellToken,
+          buyToken, 
+          sellAmount,
+          taker,
+          slippageBps: slippagePercentage ? Math.round(parseFloat(slippagePercentage) * 10000) : 'default'
+        });
+        
+        // Add request info to response for debugging
+        parsedBody._debug = {
+          requestUrl: fullUrl.replace(apiKey, '***'),
+          chainId: 8453,
+          sellToken,
+          buyToken,
+          sellAmount,
+          taker,
+          apiKeySet: !!apiKey
+        };
       }
+      
+      res.status(response.status);
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(parsedBody);
+    } catch (e) {
+      console.error('Failed to parse 0x response:', e);
+      res.status(response.status);
+      res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
+      res.setHeader('Cache-Control', 'no-store');
+      res.end(body);
     }
-    
-    res.status(response.status);
-    res.setHeader('Content-Type', response.headers.get('content-type') || 'application/json');
-    res.setHeader('Cache-Control', 'no-store');
-    res.end(body);
   } catch (error) {
     console.error('Proxy error:', error);
     res.status(500).json({ error: error.message || 'Internal server error' });
