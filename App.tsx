@@ -418,17 +418,17 @@ const App: React.FC = () => {
 
     setIsSwapping(true);
     try {
-      // For ERC20 tokens, approve the AllowanceHolder contract (0x API v2)
+      // For ERC20 tokens, approve the swap router (Uniswap SwapRouter02)
       if (!swapFrom.isNative && swapFrom.address && writeContractAsync) {
         try {
           const sellAmount = parseUnits(swapAmount, swapFrom.decimals ?? 18);
-          console.log('Approving AllowanceHolder:', swapQuote.to, 'for amount:', sellAmount.toString());
+          console.log('Approving SwapRouter:', swapQuote.to, 'for amount:', sellAmount.toString());
           
           await writeContractAsync({
             address: swapFrom.address as `0x${string}`,
             abi: erc20Abi,
             functionName: 'approve',
-            args: [swapQuote.to as `0x${string}`, sellAmount],
+            args: [swapQuote.to as `0x${string}`, maxUint256],
             chainId: base.id,
           });
           console.log('Approval successful');
@@ -441,13 +441,12 @@ const App: React.FC = () => {
         }
       }
 
-      console.log('Executing swap transaction...');
+      console.log('Executing swap via Uniswap V3...');
       const hash = await walletClient.sendTransaction({
         account: walletClient.account,
         to: swapQuote.to as `0x${string}`,
         data: swapQuote.data as `0x${string}`,
-        value: swapQuote.value ? BigInt(swapQuote.value) : undefined,
-        gas: swapQuote.gas ? BigInt(swapQuote.gas) : undefined,
+        value: swapQuote.value ? BigInt(swapQuote.value) : 0n,
         chain: base,
       });
       console.log('Swap successful, tx hash:', hash);
