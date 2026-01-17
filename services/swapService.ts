@@ -95,6 +95,15 @@ export const getSwapQuote = async (
     params.set('taker', takerAddress);
   }
 
+  console.log('[0x API Request]', {
+    sellToken,
+    buyToken,
+    sellAmount,
+    sellAmountInEth: amount,
+    takerAddress,
+    url: `${ZERO_X_PROXY_URL}?${params.toString()}`
+  });
+
   try {
     const response = await fetch(`${ZERO_X_PROXY_URL}?${params.toString()}`, {
       headers: {
