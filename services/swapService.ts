@@ -1,11 +1,16 @@
 import { formatUnits, parseUnits } from 'viem';
 import { Token } from '../types';
 
-const ZERO_X_API_URL = '/api/0x/swap/v1/quote';
+const ZERO_X_PROXY_URL = '/api/0x/swap/v1/quote';
+const ZERO_X_DIRECT_URL = 'https://base.api.0x.org/swap/v1/quote';
 const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-const getZeroXApiKey = () =>
-  (typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_0X_API_KEY') : null) ||
-  ((import.meta as any).env?.VITE_0X_API_KEY as string | undefined);
+
+const getZeroXApiKey = () => {
+  if (typeof localStorage !== 'undefined') {
+    return localStorage.getItem('VITE_0X_API_KEY') || localStorage.getItem('zeroXKey');
+  }
+  return (import.meta as any).env?.VITE_0X_API_KEY as string | undefined;
+};
 
 type ZeroXQuoteResponse = {
   buyAmount: string;
@@ -49,7 +54,10 @@ export const getSwapQuote = async (
   takerAddress?: string | null
 ): Promise<SwapQuote | null> => {
   const apiKey = getZeroXApiKey();
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.error('No 0x API key found');
+    return null;
+  }
   if (!amount || Number(amount) <= 0) return null;
   if (!from.isNative && !from.address) return null;
   if (!to.isNative && !to.address) return null;
@@ -69,19 +77,47 @@ export const getSwapQuote = async (
     params.set('takerAddress', takerAddress);
   }
 
-  const response = await fetch(`${ZERO_X_API_URL}?${params.toString()}`, {
-    headers: {
-      '0x-api-key': apiKey,
-    },
-  });
+  try {
+    const response = await fetch(`${ZERO_X_PROXY_URL}?${params.toString()}`, {
+      headers: {
+        '0x-api-key': apiKey,
+      },
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('0x quote failed:', response.status, errorText);
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('0x quote failed via proxy:', response.status, errorText);
+      
+      console.log('Trying direct API call...');
+      const directResponse = await fetch(`${ZERO_X_DIRECT_URL}?${params.toString()}`, {
+        headers: {
+          '0x-api-key': apiKey,
+        },
+      });
+
+      if (!directResponse.ok) {
+        const directErrorText = await directResponse.text();
+        console.error('0x quote failed via direct call:', directResponse.status, directErrorText);
+        return null;
+      }
+
+      const data = (await directResponse.json()) as ZeroXQuoteResponse;
+      return formatQuoteResponse(data, to, slippagePercentage);
+    }
+
+    const data = (await response.json()) as ZeroXQuoteResponse;
+    return formatQuoteResponse(data, to, slippagePercentage);
+  } catch (error) {
+    console.error('Swap quote error:', error);
     return null;
   }
+};
 
-  const data = (await response.json()) as ZeroXQuoteResponse;
+function formatQuoteResponse(
+  data: ZeroXQuoteResponse,
+  to: Token,
+  slippagePercentage: number
+): SwapQuote {
   const buyAmountFormatted = formatUnits(BigInt(data.buyAmount), to.decimals ?? 18);
   const price = Number(data.price);
   const guaranteed = Number(data.guaranteedPrice ?? data.price);
@@ -99,4 +135,4 @@ export const getSwapQuote = async (
     value: data.value,
     gas: data.gas,
   };
-};
+}
