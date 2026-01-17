@@ -34,6 +34,9 @@ const rpcUrls = [
 // Use the first available RPC or fallback to Base's public RPC
 const primaryRpc = rpcUrls.length > 0 ? rpcUrls[0] : 'https://mainnet.base.org';
 
+console.log('[RPC Config] Using RPC:', primaryRpc);
+console.log('[RPC Config] Available RPCs:', rpcUrls);
+
 const wagmiConfig = createConfig({
   chains: [base],
   connectors: [

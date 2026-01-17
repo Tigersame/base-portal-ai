@@ -160,20 +160,31 @@ const App: React.FC = () => {
     return saved === null ? true : saved === 'true';
   });
 
-  const { data: nativeBalance } = useBalance({
+  const { data: nativeBalance, isLoading: isLoadingBalance, error: balanceError } = useBalance({
     address: onchainAddress,
     chainId: base.id,
     query: {
       enabled: Boolean(onchainAddress),
+      refetchInterval: 10000,
     },
   });
+
+  // Debug balance fetching
+  useEffect(() => {
+    if (onchainAddress) {
+      console.log('[Balance] Address:', onchainAddress);
+      console.log('[Balance] Loading:', isLoadingBalance);
+      console.log('[Balance] Data:', nativeBalance);
+      console.log('[Balance] Error:', balanceError);
+    }
+  }, [onchainAddress, isLoadingBalance, nativeBalance, balanceError]);
 
   const erc20Tokens = useMemo(
     () => INITIAL_TOKENS.filter(token => !token.isNative && token.address),
     []
   );
 
-  const { data: erc20Balances } = useReadContracts({
+  const { data: erc20Balances, isLoading: isLoadingERC20, error: erc20Error } = useReadContracts({
     contracts: erc20Tokens.map(token => ({
       address: token.address as `0x${string}`,
       abi: erc20Abi,
@@ -183,8 +194,18 @@ const App: React.FC = () => {
     })),
     query: {
       enabled: Boolean(onchainAddress) && erc20Tokens.length > 0,
+      refetchInterval: 10000,
     },
   });
+
+  // Debug ERC20 balance fetching
+  useEffect(() => {
+    if (onchainAddress && erc20Tokens.length > 0) {
+      console.log('[ERC20] Loading:', isLoadingERC20);
+      console.log('[ERC20] Data:', erc20Balances);
+      console.log('[ERC20] Error:', erc20Error);
+    }
+  }, [onchainAddress, isLoadingERC20, erc20Balances, erc20Error, erc20Tokens.length]);
 
   const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
