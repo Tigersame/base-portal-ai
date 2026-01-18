@@ -222,24 +222,29 @@ const App: React.FC = () => {
   const { writeContractAsync } = useWriteContract();
 
   const availableTokens = useMemo(() => {
-    // Debug wallet connection
-    console.log('[Balance] Wallet:', onchainAddress, 'Connected:', isConnected);
-    
     return INITIAL_TOKENS.map((token) => {
+      // Native ETH balance
       if (token.isNative) {
-        const balance = parseFloat(nativeBalance?.formatted ?? '0');
-        return { ...token, balance };
+        return {
+          ...token,
+          balance: parseFloat(nativeBalance?.formatted ?? '0'),
+        };
       }
 
-      // Use address.toLowerCase() match for reliable ERC20 balance lookup
-      const idx = erc20Tokens.findIndex(t => t.address?.toLowerCase() === token.address?.toLowerCase());
-      const raw = idx >= 0 ? (erc20Balances?.[idx]?.result as bigint | undefined) : undefined;
+      // ERC20 balance - safe read with status check
+      const idx = erc20Tokens.findIndex(
+        (t) => t.address?.toLowerCase() === token.address?.toLowerCase()
+      );
+
+      const item = idx >= 0 ? erc20Balances?.[idx] : undefined;
+      const raw = item && item.status === 'success' ? (item.result as bigint) : 0n;
+
       const decimals = token.decimals ?? 18;
-      const balance = raw ? parseFloat(formatUnits(raw, decimals)) : 0;
-      
+      const balance = parseFloat(formatUnits(raw, decimals));
+
       return { ...token, balance };
     });
-  }, [nativeBalance?.formatted, erc20Balances, erc20Tokens, onchainAddress, isConnected]);
+  }, [nativeBalance?.formatted, erc20Balances, erc20Tokens]);
   const [activePieIndex, setActivePieIndex] = useState(0);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   
@@ -388,13 +393,25 @@ const App: React.FC = () => {
   }, [swapQuote, activeTab]);
 
   const handleSignInFarcaster = async () => {
+    // Only run Farcaster sign-in inside MiniApp
+    if (!isMiniApp()) {
+      console.log('[Farcaster] Not in MiniApp, skipping sign-in');
+      return;
+    }
+    
     setIsConnectingFarcaster(true);
     try {
-      await sdk.actions.signIn({ nonce: Math.random().toString(36).substring(2) });
+      await sdk.actions.signIn({ nonce: crypto.randomUUID() });
       const context = await sdk.context;
-      if (context?.user) {
-        setFarcasterUser(context.user);
-        if (context.user.username) setBasename(`${context.user.username}.base`);
+      
+      // Safe check - stop if no user
+      if (!context?.user) {
+        console.log('[Farcaster] No user context after sign-in');
+        return;
+      }
+      
+      setFarcasterUser(context.user);
+      if (context.user.username) setBasename(`${context.user.username}.base`);
         
         // Auto-connect wallet after sign-in
         if (!isConnected && connectors.length > 0) {
@@ -414,7 +431,6 @@ const App: React.FC = () => {
             console.warn('Wallet connection failed:', connectError);
           }
         }
-      }
     } catch (err) {
       console.error("Sign-In failed:", err);
     } finally {
