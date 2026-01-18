@@ -195,11 +195,12 @@ const App: React.FC = () => {
   );
 
   const { data: erc20Balances, isLoading: isLoadingERC20, error: erc20Error } = useReadContracts({
+    allowFailure: true,
     contracts: erc20Tokens.map(token => ({
       address: token.address as `0x${string}`,
       abi: erc20Abi,
       functionName: 'balanceOf',
-      args: [onchainAddress],
+      args: [onchainAddress as `0x${string}`],
       chainId: base.id,
     })),
     query: {
@@ -221,19 +222,24 @@ const App: React.FC = () => {
   const { writeContractAsync } = useWriteContract();
 
   const availableTokens = useMemo(() => {
-    return INITIAL_TOKENS.map((token, index) => {
+    // Debug wallet connection
+    console.log('[Balance] Wallet:', onchainAddress, 'Connected:', isConnected);
+    
+    return INITIAL_TOKENS.map((token) => {
       if (token.isNative) {
         const balance = parseFloat(nativeBalance?.formatted ?? '0');
         return { ...token, balance };
       }
 
-      const erc20Index = erc20Tokens.findIndex(t => t.symbol === token.symbol);
-      const erc20Result = (erc20Index >= 0 && erc20Balances?.[erc20Index]) ? erc20Balances[erc20Index].result : undefined;
+      // Use address.toLowerCase() match for reliable ERC20 balance lookup
+      const idx = erc20Tokens.findIndex(t => t.address?.toLowerCase() === token.address?.toLowerCase());
+      const raw = idx >= 0 ? (erc20Balances?.[idx]?.result as bigint | undefined) : undefined;
       const decimals = token.decimals ?? 18;
-      const balance = erc20Result ? parseFloat(formatUnits(erc20Result as bigint, decimals)) : 0;
+      const balance = raw ? parseFloat(formatUnits(raw, decimals)) : 0;
+      
       return { ...token, balance };
     });
-  }, [nativeBalance?.formatted, erc20Balances, erc20Tokens]);
+  }, [nativeBalance?.formatted, erc20Balances, erc20Tokens, onchainAddress, isConnected]);
   const [activePieIndex, setActivePieIndex] = useState(0);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   
