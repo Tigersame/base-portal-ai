@@ -284,6 +284,16 @@ const App: React.FC = () => {
       return { ...token, balance };
     });
   }, [nativeBalance?.formatted, erc20BalanceMap]);
+
+  // Debug: Log ERC20 balance map values
+  useEffect(() => {
+    console.log("[ERC20 MAP DEBUG] Map size:", erc20BalanceMap.size);
+    for (const [k, v] of erc20BalanceMap.entries()) {
+      const token = INITIAL_TOKENS.find(t => t.address?.toLowerCase() === k);
+      console.log(`[ERC20 MAP] ${token?.symbol || 'Unknown'} (${k}): ${v.toString()}`);
+    }
+  }, [erc20BalanceMap]);
+
   const [activePieIndex, setActivePieIndex] = useState(0);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   
