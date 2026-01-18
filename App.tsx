@@ -98,7 +98,7 @@ const INITIAL_TOKENS: Token[] = [
     icon: 'B',
     category: 'Mainnet',
     iconUrl: 'https://assets.coingecko.com/coins/images/39535/small/cbbtc.png',
-    address: '0xcbB7C00002968E65348665a53B821F644A81717c',
+    address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
     decimals: 8,
   },
   { 
