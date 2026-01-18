@@ -122,7 +122,7 @@ const INITIAL_TOKENS: Token[] = [
     icon: 'D',
     category: 'Ecosystem',
     iconUrl: 'https://assets.coingecko.com/coins/images/34515/small/degen.png',
-    address: '0x4ed4E8615216599b5966f03441F2282aE651ed9d',
+    address: '0x4ed4E862860beD51a9570b96d89aF5E1B0Efefed',
     decimals: 18,
   }
 ];
