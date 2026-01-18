@@ -225,17 +225,28 @@ const App: React.FC = () => {
   const erc20BalanceMap = useMemo(() => {
     const map = new Map<string, bigint>();
 
-    if (!erc20Balances) return map;
+    console.log('[DEBUG] erc20Balances:', erc20Balances);
+    console.log('[DEBUG] erc20Tokens:', erc20Tokens.map(t => ({ symbol: t.symbol, address: t.address })));
+
+    if (!erc20Balances) {
+      console.log('[DEBUG] No erc20Balances yet');
+      return map;
+    }
 
     erc20Tokens.forEach((t, i) => {
       const res = erc20Balances[i];
       const key = t.address?.toLowerCase();
+      
+      console.log(`[DEBUG] Token ${i}: ${t.symbol}, address: ${key}, result:`, res);
+      
       if (!key) return;
 
       if (res?.status === 'success' && typeof res.result === 'bigint') {
         map.set(key, res.result);
+        console.log(`[DEBUG] Set ${t.symbol} balance: ${res.result.toString()}`);
       } else {
         map.set(key, 0n);
+        console.log(`[DEBUG] Set ${t.symbol} balance: 0 (status: ${res?.status})`);
       }
     });
 
@@ -248,12 +259,16 @@ const App: React.FC = () => {
   }, [erc20Balances, erc20Tokens]);
 
   const availableTokens = useMemo(() => {
+    console.log('[DEBUG] Building availableTokens, erc20BalanceMap size:', erc20BalanceMap.size);
+    
     return INITIAL_TOKENS.map((token) => {
       // Native ETH balance
       if (token.isNative) {
+        const balance = parseFloat(nativeBalance?.formatted ?? '0');
+        console.log(`[DEBUG] ${token.symbol} (native): ${balance}`);
         return {
           ...token,
-          balance: parseFloat(nativeBalance?.formatted ?? '0'),
+          balance,
         };
       }
 
@@ -263,6 +278,8 @@ const App: React.FC = () => {
 
       const decimals = token.decimals ?? 18;
       const balance = parseFloat(formatUnits(raw, decimals));
+      
+      console.log(`[DEBUG] ${token.symbol}: addr=${addr}, raw=${raw.toString()}, decimals=${decimals}, balance=${balance}`);
 
       return { ...token, balance };
     });
