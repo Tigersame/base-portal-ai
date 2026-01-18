@@ -221,6 +221,32 @@ const App: React.FC = () => {
   const { data: walletClient } = useWalletClient();
   const { writeContractAsync } = useWriteContract();
 
+  // Build ERC20 balance map by address (not symbol) - fixes index mismatch issues
+  const erc20BalanceMap = useMemo(() => {
+    const map = new Map<string, bigint>();
+
+    if (!erc20Balances) return map;
+
+    erc20Tokens.forEach((t, i) => {
+      const res = erc20Balances[i];
+      const key = t.address?.toLowerCase();
+      if (!key) return;
+
+      if (res?.status === 'success' && typeof res.result === 'bigint') {
+        map.set(key, res.result);
+      } else {
+        map.set(key, 0n);
+      }
+    });
+
+    // Debug: log the balance map
+    console.log('[ERC20] Balance Map:', Object.fromEntries(
+      Array.from(map.entries()).map(([k, v]) => [k, v.toString()])
+    ));
+
+    return map;
+  }, [erc20Balances, erc20Tokens]);
+
   const availableTokens = useMemo(() => {
     return INITIAL_TOKENS.map((token) => {
       // Native ETH balance
@@ -231,20 +257,16 @@ const App: React.FC = () => {
         };
       }
 
-      // ERC20 balance - safe read with status check
-      const idx = erc20Tokens.findIndex(
-        (t) => t.address?.toLowerCase() === token.address?.toLowerCase()
-      );
-
-      const item = idx >= 0 ? erc20Balances?.[idx] : undefined;
-      const raw = item && item.status === 'success' ? (item.result as bigint) : 0n;
+      // ERC20 balance - lookup by address from map
+      const addr = token.address?.toLowerCase();
+      const raw = addr ? erc20BalanceMap.get(addr) ?? 0n : 0n;
 
       const decimals = token.decimals ?? 18;
       const balance = parseFloat(formatUnits(raw, decimals));
 
       return { ...token, balance };
     });
-  }, [nativeBalance?.formatted, erc20Balances, erc20Tokens]);
+  }, [nativeBalance?.formatted, erc20BalanceMap]);
   const [activePieIndex, setActivePieIndex] = useState(0);
   const [aiInsight, setAiInsight] = useState<AIInsight | null>(null);
   
