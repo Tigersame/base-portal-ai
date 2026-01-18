@@ -142,6 +142,15 @@ const PortalLogo = () => (
     </defs>
   </svg>
 );
+// Helper to detect if running inside Farcaster Mini App iframe
+const isMiniApp = (): boolean => {
+  try {
+    return typeof window !== 'undefined' && window.parent !== window;
+  } catch {
+    return false;
+  }
+};
+
 
 const App: React.FC = () => {
   const { address: onchainAddress, isConnected } = useAccount();
@@ -277,6 +286,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       try {
+        // Only run Farcaster SDK inside MiniApp
+        if (!isMiniApp()) {
+          return;
+        }
         await sdk.actions.ready();
         const context = await sdk.context;
         if (context?.user) {
