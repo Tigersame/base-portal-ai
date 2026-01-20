@@ -12,7 +12,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 (globalThis as any).Buffer = (globalThis as any).Buffer || Buffer;
 
-const isFarcasterMiniApp = typeof window !== 'undefined' && !!(window as any).farcaster;
+const isFarcasterMiniApp = typeof window !== 'undefined' && (!!(window as any).farcaster || window.parent !== window);
 
 const queryClient = new QueryClient();
 
@@ -26,7 +26,9 @@ console.log('[RPC Config] Fallback RPC:', BASE_PUBLIC_RPC);
 console.log('[RPC Config] Is Farcaster Mini App:', isFarcasterMiniApp);
 
 const connectors = isFarcasterMiniApp
-  ? []
+  ? [
+      injected(),
+    ]
   : [
       coinbaseWallet({
         appName: 'BEND',

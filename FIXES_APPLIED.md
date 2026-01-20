@@ -2,6 +2,30 @@
 
 ## Date: $(date)
 
+### ✅ Fix 2: Farcaster Wallet Auto-Connect
+
+**Issue**: Wallet not auto-connecting when running inside Farcaster (Warpcast) environment.
+
+**Root Cause**: 
+1. The `connectors` configuration was empty `[]` when `isFarcasterMiniApp` was true.
+2. The `isFarcasterMiniApp` check was too strict, potentially failing if `window.farcaster` wasn't immediately available.
+
+**Solution**:
+1. Added `injected()` connector to the `connectors` list for Farcaster environment. This allows Wagmi to detect the Farcaster wallet.
+2. Updated `isFarcasterMiniApp` to also check for `window.parent !== window` (iframe detection).
+
+```typescript
+const isFarcasterMiniApp = typeof window !== 'undefined' && (!!(window as any).farcaster || window.parent !== window);
+
+const connectors = isFarcasterMiniApp
+  ? [ injected() ] // Allow injected wallet (Farcaster)
+  : [ coinbaseWallet(...) ]; // Standalone mode
+```
+
+**Status**: ✅ Fixed
+
+---
+
 ### ✅ Fix 1: Farcaster SDK postMessage Origin Mismatch
 
 **Issue**: 
@@ -101,9 +125,9 @@ VITE_PUBLIC_ONCHAINKIT_API_KEY="81a39fc1-8229-4520-b1da-4eabc272ef43"
 ## Deployment Info
 
 - **Production URL**: https://base-portal-ai.vercel.app
-- **Latest Deployment**: https://base-portal-ox1to1hw5-devsminiapp.vercel.app
+- **Latest Deployment**: https://base-portal-9zcemyjlc-devsminiapp.vercel.app
 - **Inspect**: https://vercel.com/devsminiapp/base-portal-ai
-- **Git Commit**: Fixed postMessage origin mismatch with isMiniApp check
+- **Git Commit**: Fixed auto-connect in Farcaster environment
 
 ## Testing Checklist
 
